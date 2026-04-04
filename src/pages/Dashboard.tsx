@@ -18,24 +18,27 @@ export default function Dashboard() {
   const [newAsin, setNewAsin] = useState('');
   const [newName, setNewName] = useState('');
 
-  const { data: products, isLoading } = useQuery({
+  const { data: products, isLoading, isError, error: queryError } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
+      console.log('[Dashboard] Fetching products from Supabase...');
       const { data, error } = await supabase
         .from('products')
         .select(`
           *,
-          bsr_history (
-            main_rank,
-            sub_rank,
-            recorded_at
-          )
+          bsr_history (*)
         `)
         .order('created_at', { ascending: false });
-      
-      if (error) throw error;
+
+      if (error) {
+        console.error('[Dashboard] Supabase query error:', error);
+        throw error;
+      }
+
+      console.log('[Dashboard] Products fetched:', data?.length ?? 0);
       return data;
     },
+    staleTime: 0,
   });
 
   const addProductMutation = useMutation({
@@ -69,6 +72,17 @@ export default function Dashboard() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center space-y-2">
+          <p className="text-rose-600 font-semibold">Erro ao carregar produtos</p>
+          <p className="text-slate-500 text-sm font-mono">{(queryError as any)?.message ?? 'Erro desconhecido'}</p>
+        </div>
       </div>
     );
   }
@@ -123,7 +137,9 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {products?.map((product) => {
-          const history = product.bsr_history || [];
+          const history = (product.bsr_history || []).sort(
+            (a: any, b: any) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime()
+          );
           const current = history[0] || { main_rank: 0, sub_rank: 0 };
           const previous = history[1] || { main_rank: 0, sub_rank: 0 };
           
@@ -179,7 +195,7 @@ export default function Dashboard() {
           );
         })}
 
-        {products?.length === 0 && (
+        {(!products || products.length === 0) && (
           <Card className="col-span-full py-12 flex flex-col items-center justify-center border-dashed">
             <Package className="h-12 w-12 text-slate-300 mb-4" />
             <CardTitle className="text-slate-400">Nenhum produto rastreado</CardTitle>
