@@ -3,6 +3,13 @@ const CLIENT_SECRET = process.env.SP_API_CLIENT_SECRET;
 const REFRESH_TOKEN = process.env.SP_API_REFRESH_TOKEN;
 const MARKETPLACE_ID = process.env.SP_API_MARKETPLACE_ID || 'A2Q3Y263D00KWC';
 
+const BASE_URL = 'https://sellingpartnerapi-na.amazon.com';
+
+const DEFAULT_HEADERS = {
+  'Content-Type': 'application/json',
+  'x-amz-user-agent': 'python-requests/2.27.1',
+};
+
 export async function getAccessToken() {
   console.log('[spapi] Requesting access token...');
 
@@ -25,56 +32,43 @@ export async function getAccessToken() {
   }
 
   const data = await response.json();
-  console.log('[spapi] Access token obtained successfully');
+  console.log('[spapi] Access token obtained:', data.access_token ? data.access_token.slice(0, 20) + '...' : 'EMPTY');
   return data.access_token;
 }
 
 export async function getBSR(asin) {
-  console.log(`[spapi] Fetching BSR for ASIN: ${asin}`);
+  console.log(`[spapi] ===== getBSR(${asin}) =====`);
 
   const accessToken = await getAccessToken();
 
-  const url = new URL(
-    `https://sellingpartnerapi-na.amazon.com/catalog/2022-04-01/items/${asin}`
-  );
-  url.searchParams.set('marketplaceIds', MARKETPLACE_ID);
-  url.searchParams.set('includedData', 'salesRanks');
+  const url = new URL(`${BASE_URL}/products/pricing/v0/items/${asin}/offers`);
+  url.searchParams.set('MarketplaceId', MARKETPLACE_ID);
+  url.searchParams.set('ItemCondition', 'New');
 
   console.log(`[spapi] GET ${url.toString()}`);
 
   const response = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'x-amz-access-token': accessToken,
-      'Content-Type': 'application/json',
-    },
+    headers: { ...DEFAULT_HEADERS, 'x-amz-access-token': accessToken },
   });
 
+  const bodyText = await response.text();
+  console.log(`[spapi] Response status: ${response.status}`);
+  console.log(`[spapi] Response body: ${bodyText}`);
+
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`SP-API error for ${asin}: ${response.status} ${text}`);
+    throw new Error(`SP-API pricing error for ${asin}: ${response.status} ${bodyText}`);
   }
 
-  const data = await response.json();
-  console.log(`[spapi] Raw salesRanks for ${asin}:`, JSON.stringify(data.salesRanks));
+  const data = JSON.parse(bodyText);
+  const rankings = data.payload?.Summary?.SalesRankings ?? [];
 
-  const salesRanks = data.salesRanks?.[0];
-
-  if (!salesRanks) {
-    throw new Error(`No salesRanks data returned for ASIN ${asin}`);
-  }
-
-  const displayGroupRanks = salesRanks.displayGroupRanks || [];
-  const classificationRanks = salesRanks.classificationRanks || [];
-
-  const main = displayGroupRanks[0];
-  const sub = classificationRanks[0];
+  console.log(`[spapi] SalesRankings for ${asin}:`, JSON.stringify(rankings));
 
   const result = {
-    rankMain: main?.rank ?? 0,
-    rankSub: sub?.rank ?? 0,
-    category: main?.title ?? '',
-    subcategory: sub?.title ?? '',
+    rankMain: rankings[0]?.Rank ?? 0,
+    rankSub: rankings[1]?.Rank ?? 0,
+    category: rankings[0]?.ProductCategoryId ?? '',
+    subcategory: rankings[1]?.ProductCategoryId ?? '',
   };
 
   console.log(`[spapi] Parsed BSR for ${asin}:`, result);
