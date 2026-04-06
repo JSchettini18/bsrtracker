@@ -33,7 +33,6 @@ export default async function handler(req, res) {
       // 1. Fetch BSR from Amazon SP-API
       const bsr = await getBSR(product.asin);
       console.log(`[collect-bsr] BSR fetched:`, bsr);
-      await delay(1000);
 
       // 2. Fetch the last BSR reading for this product
       const { data: lastReading, error: lastError } = await supabase
@@ -110,8 +109,17 @@ export default async function handler(req, res) {
       results.push({ asin: product.asin, success: true, bsr });
     } catch (err) {
       console.error(`[collect-bsr] Failed to process ${product.asin}:`, err.message);
+      const is429 = err.message?.includes('429');
+      if (is429) {
+        console.log(`[collect-bsr] 429 detected for ${product.asin} — waiting 10s`);
+        await delay(10000);
+      }
       errors.push({ asin: product.asin, error: err.message });
     }
+
+    // Always wait between ASINs to avoid rate limits
+    console.log(`[collect-bsr] Waiting 3s before next ASIN...`);
+    await delay(3000);
   }
 
   const summary = {
