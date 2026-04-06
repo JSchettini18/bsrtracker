@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { getBSR } from './lib/spapi.js';
 
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
@@ -31,6 +33,7 @@ export default async function handler(req, res) {
       // 1. Fetch BSR from Amazon SP-API
       const bsr = await getBSR(product.asin);
       console.log(`[collect-bsr] BSR fetched:`, bsr);
+      await delay(1000);
 
       // 2. Fetch the last BSR reading for this product
       const { data: lastReading, error: lastError } = await supabase
