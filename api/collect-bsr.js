@@ -26,14 +26,45 @@ export default async function handler(req, res) {
   const results = [];
   const errors = [];
 
+  const RETRY_DELAYS = [10000, 15000]; // 10s after 1st 429, 15s after 2nd
+
   for (const product of products) {
+    console.log(`[collect-bsr] --- Processing ${product.asin} (${product.name}) ---`);
+
+    // Retry loop: up to 3 attempts for 429 errors
+    let bsr = null;
+    let attempt = 0;
+    const maxAttempts = 3;
+
+    while (attempt < maxAttempts) {
+      attempt++;
+      try {
+        console.log(`[collect-bsr] getBSR attempt ${attempt}/${maxAttempts} for ${product.asin}`);
+        bsr = await getBSR(product.asin);
+        console.log(`[collect-bsr] BSR fetched:`, bsr);
+        break; // success — exit retry loop
+      } catch (err) {
+        const is429 = err.message?.includes('429');
+        if (is429 && attempt < maxAttempts) {
+          const waitMs = RETRY_DELAYS[attempt - 1];
+          console.log(`[collect-bsr] 429 on attempt ${attempt} for ${product.asin} — waiting ${waitMs / 1000}s before retry`);
+          await delay(waitMs);
+        } else {
+          console.error(`[collect-bsr] Failed to process ${product.asin} (attempt ${attempt}):`, err.message);
+          errors.push({ asin: product.asin, error: err.message, attempts: attempt });
+          break; // non-429 error or max attempts reached
+        }
+      }
+    }
+
+    // If getBSR failed after all retries, skip to next ASIN
+    if (!bsr) {
+      console.log(`[collect-bsr] Waiting 3s before next ASIN...`);
+      await delay(3000);
+      continue;
+    }
+
     try {
-      console.log(`[collect-bsr] --- Processing ${product.asin} (${product.name}) ---`);
-
-      // 1. Fetch BSR from Amazon SP-API
-      const bsr = await getBSR(product.asin);
-      console.log(`[collect-bsr] BSR fetched:`, bsr);
-
       // 2. Fetch the last BSR reading for this product
       const { data: lastReading, error: lastError } = await supabase
         .from('bsr_history')
@@ -108,16 +139,11 @@ export default async function handler(req, res) {
 
       results.push({ asin: product.asin, success: true, bsr });
     } catch (err) {
-      console.error(`[collect-bsr] Failed to process ${product.asin}:`, err.message);
-      const is429 = err.message?.includes('429');
-      if (is429) {
-        console.log(`[collect-bsr] 429 detected for ${product.asin} — waiting 10s`);
-        await delay(10000);
-      }
+      console.error(`[collect-bsr] Failed to save data for ${product.asin}:`, err.message);
       errors.push({ asin: product.asin, error: err.message });
     }
 
-    // Always wait between ASINs to avoid rate limits
+    // Always wait 3s between ASINs
     console.log(`[collect-bsr] Waiting 3s before next ASIN...`);
     await delay(3000);
   }
