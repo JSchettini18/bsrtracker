@@ -143,9 +143,9 @@ export default function Dashboard() {
           const current = history[0] || { main_rank: 0, sub_rank: 0 };
           const previous = history[1] || { main_rank: 0, sub_rank: 0 };
           
-          const variation = calculateVariation(current.main_rank, previous.main_rank);
-          const isRankImproved = current.main_rank < previous.main_rank;
-          const insight = getInsight(current.main_rank, previous.main_rank);
+          const variation = calculateVariation(current.sub_rank, previous.sub_rank);
+          const isRankImproved = current.sub_rank < previous.sub_rank;
+          const insight = getInsight(current.sub_rank, previous.sub_rank);
 
           return (
             <Card key={product.id} className="hover:shadow-md transition-shadow">
@@ -163,8 +163,8 @@ export default function Dashboard() {
               <CardContent>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div className="space-y-1">
-                    <p className="text-xs text-slate-500 uppercase font-medium">BSR Principal</p>
-                    <p className="text-2xl font-bold">#{current.main_rank.toLocaleString()}</p>
+                    <p className="text-xs text-slate-500 uppercase font-medium">BSR Subcategoria</p>
+                    <p className="text-2xl font-bold">#{current.sub_rank.toLocaleString()}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-xs text-slate-500 uppercase font-medium">Variação</p>
@@ -176,11 +176,11 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <p className="text-xs text-slate-500 uppercase font-medium">Subcategoria</p>
-                    <p className="text-sm font-medium">#{current.sub_rank.toLocaleString()}</p>
+                    <p className="text-xs text-slate-500 uppercase font-medium">BSR Principal</p>
+                    <p className="text-sm font-medium">#{current.main_rank.toLocaleString()}</p>
                   </div>
                   
                   <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">

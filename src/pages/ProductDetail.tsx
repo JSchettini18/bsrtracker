@@ -81,40 +81,53 @@ export default function ProductDetail() {
             <CardContent>
               <div className="h-[400px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <LineChart data={chartData} margin={{ top: 5, right: 60, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis 
-                      dataKey="date" 
+                    <XAxis
+                      dataKey="date"
                       axisLine={false}
                       tickLine={false}
                       tick={{ fontSize: 12, fill: '#64748b' }}
                       dy={10}
                     />
-                    <YAxis 
-                      reversed 
+                    <YAxis
+                      yAxisId="left"
+                      reversed
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fontSize: 12, fill: '#64748b' }}
+                      tick={{ fontSize: 12, fill: '#2563eb' }}
+                      label={{ value: 'Principal', angle: -90, position: 'insideLeft', fill: '#2563eb', fontSize: 11 }}
                     />
-                    <Tooltip 
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      reversed
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: '#10b981' }}
+                      label={{ value: 'Subcategoria', angle: 90, position: 'insideRight', fill: '#10b981', fontSize: 11 }}
+                    />
+                    <Tooltip
                       contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                       labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
                     />
                     <Legend verticalAlign="top" height={36} iconType="circle" />
-                    <Line 
-                      name="Categoria Principal"
-                      type="monotone" 
-                      dataKey="main" 
-                      stroke="#2563eb" 
+                    <Line
+                      name="Categoria Principal (eixo esq.)"
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="main"
+                      stroke="#2563eb"
                       strokeWidth={3}
                       dot={{ r: 4, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
                       activeDot={{ r: 6, strokeWidth: 0 }}
                     />
-                    <Line 
-                      name="Subcategoria"
-                      type="monotone" 
-                      dataKey="sub" 
-                      stroke="#10b981" 
+                    <Line
+                      name="Subcategoria (eixo dir.)"
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="sub"
+                      stroke="#10b981"
                       strokeWidth={3}
                       dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
                       activeDot={{ r: 6, strokeWidth: 0 }}

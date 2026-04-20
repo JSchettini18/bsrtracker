@@ -65,6 +65,23 @@ export default async function handler(req, res) {
     }
 
     try {
+      // Update product categories from SP-API
+      if (bsr.category || bsr.subcategory) {
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({
+            main_category: bsr.category,
+            sub_category: bsr.subcategory,
+          })
+          .eq('asin', product.asin);
+
+        if (updateError) {
+          console.error(`[collect-bsr] Error updating categories for ${product.asin}:`, updateError);
+        } else {
+          console.log(`[collect-bsr] Categories updated for ${product.asin}: ${bsr.category} / ${bsr.subcategory}`);
+        }
+      }
+
       // 2. Fetch the last BSR reading for this product
       const { data: lastReading, error: lastError } = await supabase
         .from('bsr_history')
@@ -87,6 +104,7 @@ export default async function handler(req, res) {
           asin: product.asin,
           main_rank: bsr.rankMain,
           sub_rank: bsr.rankSub,
+          price: bsr.price,
           recorded_at: new Date().toISOString(),
         });
 

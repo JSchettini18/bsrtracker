@@ -60,15 +60,20 @@ export async function getBSR(asin) {
   }
 
   const data = JSON.parse(bodyText);
-  const rankings = data.payload?.Summary?.SalesRankings ?? [];
+  const summary = data.payload?.Summary ?? {};
+  const rankings = summary.SalesRankings ?? [];
+  const buyBoxPrices = summary.BuyBoxPrices ?? [];
+  const price = buyBoxPrices[0]?.LandedPrice?.Amount ?? null;
 
   console.log(`[spapi] SalesRankings for ${asin}:`, JSON.stringify(rankings));
+  console.log(`[spapi] Price for ${asin}:`, price);
 
   const result = {
     rankMain: rankings[0]?.Rank ?? 0,
     rankSub: rankings[1]?.Rank ?? 0,
     category: rankings[0]?.ProductCategoryId ?? '',
     subcategory: rankings[1]?.ProductCategoryId ?? '',
+    price,
   };
 
   console.log(`[spapi] Parsed BSR for ${asin}:`, result);
