@@ -185,6 +185,7 @@ export default function ProductDetail() {
                     <TableHead>Data</TableHead>
                     <TableHead>BSR Principal</TableHead>
                     <TableHead>BSR Sub</TableHead>
+                    <TableHead>Preço</TableHead>
                     <TableHead className="text-right">Variação</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -201,6 +202,7 @@ export default function ProductDetail() {
                         </TableCell>
                         <TableCell>#{h.main_rank.toLocaleString()}</TableCell>
                         <TableCell>#{h.sub_rank.toLocaleString()}</TableCell>
+                        <TableCell>{h.price != null ? formatBRL(Number(h.price)) : '-'}</TableCell>
                         <TableCell className="text-right">
                           <div className={`flex items-center justify-end gap-1 font-medium ${
                             isImproved ? 'text-emerald-600' : variation > 0 ? 'text-rose-600' : 'text-slate-600'
