@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, TrendingDown, TrendingUp, Calendar, Info } from 'lucide-react';
@@ -14,6 +14,7 @@ import { getCategoryName } from '@/lib/categoryMap';
 
 export default function ProductDetail() {
   const { asin } = useParams<{ asin: string }>();
+  const [chartDays, setChartDays] = useState(14);
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', asin],
@@ -53,7 +54,11 @@ export default function ProductDetail() {
   const previous = history[history.length - 2] || latest;
   const insight = getInsight(latest.main_rank, previous.main_rank);
 
-  const chartData = history.map((h: any) => ({
+  const filteredHistory = chartDays === 0
+    ? history
+    : history.filter((h: any) => new Date(h.recorded_at).getTime() >= Date.now() - chartDays * 24 * 60 * 60 * 1000);
+
+  const chartData = filteredHistory.map((h: any) => ({
     date: format(new Date(h.recorded_at), 'dd/MM', { locale: ptBR }),
     main: h.main_rank,
     sub: h.sub_rank,
@@ -82,8 +87,33 @@ export default function ProductDetail() {
         <div className="lg:col-span-2 space-y-8">
           <Card>
             <CardHeader>
-              <CardTitle>Histórico de BSR e Preço</CardTitle>
-              <CardDescription>Evolução do ranking (valores menores são melhores) e preço Buy Box</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Histórico de BSR e Preço</CardTitle>
+                  <CardDescription>Evolução do ranking (valores menores são melhores) e preço Buy Box</CardDescription>
+                </div>
+                <div className="flex gap-1">
+                  {[7, 14, 30].map(d => (
+                    <Button
+                      key={d}
+                      variant={chartDays === d ? 'default' : 'outline'}
+                      size="sm"
+                      className="text-xs h-7 px-2.5"
+                      onClick={() => setChartDays(d)}
+                    >
+                      {d}d
+                    </Button>
+                  ))}
+                  <Button
+                    variant={chartDays === 0 ? 'default' : 'outline'}
+                    size="sm"
+                    className="text-xs h-7 px-2.5"
+                    onClick={() => setChartDays(0)}
+                  >
+                    Tudo
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="h-[450px] w-full">
@@ -190,7 +220,7 @@ export default function ProductDetail() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[...history].reverse().map((h, i, arr) => {
+                  {[...filteredHistory].reverse().map((h, i, arr) => {
                     const prev = arr[i + 1] || h;
                     const variation = calculateVariation(h.main_rank, prev.main_rank);
                     const isImproved = h.main_rank < prev.main_rank;
