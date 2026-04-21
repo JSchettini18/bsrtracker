@@ -53,12 +53,18 @@ export default function ProductDetail() {
   const previous = history[history.length - 2] || latest;
   const insight = getInsight(latest.main_rank, previous.main_rank);
 
-  const chartData = history.map(h => ({
+  const chartData = history.map((h: any) => ({
     date: format(new Date(h.recorded_at), 'dd/MM', { locale: ptBR }),
     main: h.main_rank,
     sub: h.sub_rank,
+    price: h.price != null ? Number(h.price) : null,
     fullDate: format(new Date(h.recorded_at), 'PPP', { locale: ptBR }),
   }));
+
+  const hasPrice = chartData.some(d => d.price != null);
+
+  const formatBRL = (value: number) =>
+    value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (
     <div className="space-y-8">
@@ -76,13 +82,13 @@ export default function ProductDetail() {
         <div className="lg:col-span-2 space-y-8">
           <Card>
             <CardHeader>
-              <CardTitle>Histórico de BSR</CardTitle>
-              <CardDescription>Evolução do ranking (valores menores são melhores)</CardDescription>
+              <CardTitle>Histórico de BSR e Preço</CardTitle>
+              <CardDescription>Evolução do ranking (valores menores são melhores) e preço Buy Box</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[400px] w-full">
+              <div className="h-[450px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 60, left: 20, bottom: 5 }}>
+                  <LineChart data={chartData} margin={{ top: 5, right: hasPrice ? 80 : 60, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis
                       dataKey="date"
@@ -97,7 +103,7 @@ export default function ProductDetail() {
                       axisLine={false}
                       tickLine={false}
                       tick={{ fontSize: 12, fill: '#2563eb' }}
-                      label={{ value: 'Principal', angle: -90, position: 'insideLeft', fill: '#2563eb', fontSize: 11 }}
+                      label={{ value: 'BSR Principal', angle: -90, position: 'insideLeft', fill: '#2563eb', fontSize: 11 }}
                     />
                     <YAxis
                       yAxisId="right"
@@ -106,15 +112,30 @@ export default function ProductDetail() {
                       axisLine={false}
                       tickLine={false}
                       tick={{ fontSize: 12, fill: '#10b981' }}
-                      label={{ value: 'Subcategoria', angle: 90, position: 'insideRight', fill: '#10b981', fontSize: 11 }}
+                      label={{ value: 'BSR Sub', angle: 90, position: 'insideRight', fill: '#10b981', fontSize: 11, offset: hasPrice ? -20 : 0 }}
                     />
+                    {hasPrice && (
+                      <YAxis
+                        yAxisId="price"
+                        orientation="right"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10, fill: '#f59e0b' }}
+                        tickFormatter={(v: number) => `R$${v}`}
+                        width={55}
+                      />
+                    )}
                     <Tooltip
                       contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                       labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
+                      formatter={(value: any, name: string) => {
+                        if (name === 'Preço (R$)') return [formatBRL(Number(value)), name];
+                        return [`#${Number(value).toLocaleString()}`, name];
+                      }}
                     />
                     <Legend verticalAlign="top" height={36} iconType="circle" />
                     <Line
-                      name="Categoria Principal (eixo esq.)"
+                      name="BSR Principal (eixo esq.)"
                       yAxisId="left"
                       type="monotone"
                       dataKey="main"
@@ -124,7 +145,7 @@ export default function ProductDetail() {
                       activeDot={{ r: 6, strokeWidth: 0 }}
                     />
                     <Line
-                      name="Subcategoria (eixo dir.)"
+                      name="BSR Subcategoria (eixo dir.)"
                       yAxisId="right"
                       type="monotone"
                       dataKey="sub"
@@ -133,6 +154,20 @@ export default function ProductDetail() {
                       dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
                       activeDot={{ r: 6, strokeWidth: 0 }}
                     />
+                    {hasPrice && (
+                      <Line
+                        name="Preço (R$)"
+                        yAxisId="price"
+                        type="monotone"
+                        dataKey="price"
+                        stroke="#f59e0b"
+                        strokeWidth={2}
+                        strokeDasharray="6 3"
+                        dot={{ r: 3, fill: '#f59e0b', strokeWidth: 2, stroke: '#fff' }}
+                        activeDot={{ r: 5, strokeWidth: 0 }}
+                        connectNulls
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
