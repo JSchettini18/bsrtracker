@@ -32,7 +32,7 @@ export default function Dashboard() {
   const [deleteProduct, setDeleteProduct] = useState<any>(null);
 
   // Sort and filter state
-  const [sortBy, setSortBy] = useState<SortOption>('recent');
+  const [sortBy, setSortBy] = useState<SortOption>('best_bsr');
   const [searchQuery, setSearchQuery] = useState('');
 
   const { data: products, isLoading, isError, error: queryError } = useQuery({
