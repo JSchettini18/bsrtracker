@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Plus, ArrowUpRight, ArrowDownRight, Search, Package } from 'lucide-react';
+import { Plus, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Minus, Search, Package } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -147,12 +147,43 @@ export default function Dashboard() {
           const isRankImproved = current.sub_rank < previous.sub_rank;
           const insight = getInsight(current.sub_rank, previous.sub_rank);
 
+          // Trend badge: compare current vs 3-day-old reading
+          const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
+          const oldReading = history.find((h: any) => new Date(h.recorded_at).getTime() <= threeDaysAgo);
+          let trend: 'up' | 'down' | 'stable' | null = null;
+          if (oldReading && history.length >= 3) {
+            const trendVar = calculateVariation(current.sub_rank, oldReading.sub_rank);
+            if (trendVar < -5) trend = 'up';
+            else if (trendVar > 5) trend = 'down';
+            else trend = 'stable';
+          }
+
           return (
             <Card key={product.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
-                    <CardTitle className="text-lg font-semibold line-clamp-1">{product.name}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg font-semibold line-clamp-1">{product.name}</CardTitle>
+                      {trend === 'up' && (
+                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1 text-[10px] px-1.5 py-0.5">
+                          <TrendingUp className="h-3 w-3" />
+                          Subindo
+                        </Badge>
+                      )}
+                      {trend === 'down' && (
+                        <Badge className="bg-rose-100 text-rose-700 border-rose-200 gap-1 text-[10px] px-1.5 py-0.5">
+                          <TrendingDown className="h-3 w-3" />
+                          Caindo
+                        </Badge>
+                      )}
+                      {trend === 'stable' && (
+                        <Badge className="bg-slate-100 text-slate-600 border-slate-200 gap-1 text-[10px] px-1.5 py-0.5">
+                          <Minus className="h-3 w-3" />
+                          Estável
+                        </Badge>
+                      )}
+                    </div>
                     <p className="text-sm text-slate-500 font-mono">{product.asin}</p>
                   </div>
                   <Button variant="ghost" size="icon" className="h-8 w-8" render={<Link to={`/products/${product.asin}`} />}>
