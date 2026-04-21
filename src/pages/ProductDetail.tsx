@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, TrendingDown, TrendingUp, Calendar, Info } from 'lucide-react';
+import { ChevronLeft, TrendingDown, TrendingUp, Calendar, Info, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,9 +12,20 @@ import { ptBR } from 'date-fns/locale';
 import { getInsight, calculateVariation } from '@/lib/insights';
 import { getCategoryName } from '@/lib/categoryMap';
 
+const useIsDark = () => {
+  const [isDark, setIsDark] = React.useState(() => document.documentElement.classList.contains('dark'));
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setIsDark(document.documentElement.classList.contains('dark')));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+  return isDark;
+};
+
 export default function ProductDetail() {
   const { asin } = useParams<{ asin: string }>();
   const [chartDays, setChartDays] = useState(14);
+  const isDark = useIsDark();
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', asin],
@@ -71,16 +82,47 @@ export default function ProductDetail() {
   const formatBRL = (value: number) =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+  const exportCSV = () => {
+    const rows = [['Data', 'BSR Principal', 'BSR Subcategoria', 'Preço', 'Variação %']];
+    const sorted = [...history].reverse();
+    sorted.forEach((h: any, i: number) => {
+      const prev = sorted[i - 1] || h;
+      const variation = i > 0 ? calculateVariation(h.main_rank, prev.main_rank).toFixed(2) : '';
+      const price = h.price != null ? Number(h.price).toFixed(2) : '';
+      rows.push([
+        format(new Date(h.recorded_at), 'dd/MM/yyyy HH:mm'),
+        String(h.main_rank),
+        String(h.sub_rank),
+        price,
+        variation,
+      ]);
+    });
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bsr-${asin}-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-8">
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" className="h-9 w-9" render={<Link to="/" />}>
-          <ChevronLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900">{product.name}</h2>
-          <p className="text-slate-500 font-mono">{product.asin}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" className="h-9 w-9" render={<Link to="/" />}>
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-gray-100">{product.name}</h2>
+            <p className="text-slate-500 dark:text-gray-400 font-mono">{product.asin}</p>
+          </div>
         </div>
+        <Button variant="outline" className="gap-2" onClick={exportCSV}>
+          <Download className="h-4 w-4" />
+          Exportar CSV
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -119,12 +161,12 @@ export default function ProductDetail() {
               <div className="h-[450px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData} margin={{ top: 5, right: hasPrice ? 80 : 60, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#374151' : '#f1f5f9'} />
                     <XAxis
                       dataKey="date"
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fontSize: 12, fill: '#64748b' }}
+                      tick={{ fontSize: 12, fill: isDark ? '#9ca3af' : '#64748b' }}
                       dy={10}
                     />
                     <YAxis
@@ -132,8 +174,8 @@ export default function ProductDetail() {
                       reversed
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fontSize: 12, fill: '#2563eb' }}
-                      label={{ value: 'BSR Principal', angle: -90, position: 'insideLeft', fill: '#2563eb', fontSize: 11 }}
+                      tick={{ fontSize: 12, fill: isDark ? '#60a5fa' : '#2563eb' }}
+                      label={{ value: 'BSR Principal', angle: -90, position: 'insideLeft', fill: isDark ? '#60a5fa' : '#2563eb', fontSize: 11 }}
                     />
                     <YAxis
                       yAxisId="right"
@@ -141,8 +183,8 @@ export default function ProductDetail() {
                       reversed
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fontSize: 12, fill: '#10b981' }}
-                      label={{ value: 'BSR Sub', angle: 90, position: 'insideRight', fill: '#10b981', fontSize: 11, offset: hasPrice ? -20 : 0 }}
+                      tick={{ fontSize: 12, fill: isDark ? '#34d399' : '#10b981' }}
+                      label={{ value: 'BSR Sub', angle: 90, position: 'insideRight', fill: isDark ? '#34d399' : '#10b981', fontSize: 11, offset: hasPrice ? -20 : 0 }}
                     />
                     {hasPrice && (
                       <YAxis
@@ -150,13 +192,19 @@ export default function ProductDetail() {
                         orientation="right"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fontSize: 10, fill: '#f59e0b' }}
+                        tick={{ fontSize: 10, fill: isDark ? '#fbbf24' : '#f59e0b' }}
                         tickFormatter={(v: number) => `R$${v}`}
                         width={55}
                       />
                     )}
                     <Tooltip
-                      contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      contentStyle={{
+                        borderRadius: '8px',
+                        border: isDark ? '1px solid #374151' : '1px solid #e2e8f0',
+                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                        backgroundColor: isDark ? '#1f2937' : '#fff',
+                        color: isDark ? '#e5e7eb' : '#1e293b',
+                      }}
                       labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
                       formatter={(value: any, name: string) => {
                         if (name === 'Preço (R$)') return [formatBRL(Number(value)), name];
@@ -169,9 +217,9 @@ export default function ProductDetail() {
                       yAxisId="left"
                       type="monotone"
                       dataKey="main"
-                      stroke="#2563eb"
+                      stroke={isDark ? '#60a5fa' : '#2563eb'}
                       strokeWidth={3}
-                      dot={{ r: 4, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
+                      dot={{ r: 4, fill: isDark ? '#60a5fa' : '#2563eb', strokeWidth: 2, stroke: isDark ? '#111827' : '#fff' }}
                       activeDot={{ r: 6, strokeWidth: 0 }}
                     />
                     <Line
@@ -179,9 +227,9 @@ export default function ProductDetail() {
                       yAxisId="right"
                       type="monotone"
                       dataKey="sub"
-                      stroke="#10b981"
+                      stroke={isDark ? '#34d399' : '#10b981'}
                       strokeWidth={3}
-                      dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
+                      dot={{ r: 4, fill: isDark ? '#34d399' : '#10b981', strokeWidth: 2, stroke: isDark ? '#111827' : '#fff' }}
                       activeDot={{ r: 6, strokeWidth: 0 }}
                     />
                     {hasPrice && (
@@ -190,10 +238,10 @@ export default function ProductDetail() {
                         yAxisId="price"
                         type="monotone"
                         dataKey="price"
-                        stroke="#f59e0b"
+                        stroke={isDark ? '#fbbf24' : '#f59e0b'}
                         strokeWidth={2}
                         strokeDasharray="6 3"
-                        dot={{ r: 3, fill: '#f59e0b', strokeWidth: 2, stroke: '#fff' }}
+                        dot={{ r: 3, fill: isDark ? '#fbbf24' : '#f59e0b', strokeWidth: 2, stroke: isDark ? '#111827' : '#fff' }}
                         activeDot={{ r: 5, strokeWidth: 0 }}
                         connectNulls
                       />
@@ -264,7 +312,7 @@ export default function ProductDetail() {
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-slate-700 leading-relaxed italic font-medium">
+              <p className="text-slate-700 dark:text-gray-300 leading-relaxed italic font-medium">
                 "{insight}"
               </p>
             </CardContent>
@@ -276,16 +324,16 @@ export default function ProductDetail() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between py-2 border-b">
-                <span className="text-slate-500 text-sm">Categoria</span>
-                <span className="font-medium text-sm">{getCategoryName(product.main_category)}</span>
+                <span className="text-slate-500 dark:text-gray-400 text-sm">Categoria</span>
+                <span className="font-medium text-sm dark:text-gray-200">{getCategoryName(product.main_category)}</span>
               </div>
               <div className="flex justify-between py-2 border-b">
-                <span className="text-slate-500 text-sm">Subcategoria</span>
-                <span className="font-medium text-sm">{getCategoryName(product.sub_category)}</span>
+                <span className="text-slate-500 dark:text-gray-400 text-sm">Subcategoria</span>
+                <span className="font-medium text-sm dark:text-gray-200">{getCategoryName(product.sub_category)}</span>
               </div>
               <div className="flex justify-between py-2 border-b">
-                <span className="text-slate-500 text-sm">Monitorado desde</span>
-                <span className="font-medium text-sm">{format(new Date(product.created_at), 'dd/MM/yyyy')}</span>
+                <span className="text-slate-500 dark:text-gray-400 text-sm">Monitorado desde</span>
+                <span className="font-medium text-sm dark:text-gray-200">{format(new Date(product.created_at), 'dd/MM/yyyy')}</span>
               </div>
             </CardContent>
           </Card>

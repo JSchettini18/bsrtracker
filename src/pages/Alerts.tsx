@@ -34,8 +34,8 @@ export default function Alerts() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight text-slate-900">Histórico de Alertas</h2>
-        <p className="text-slate-500">Acompanhe as mudanças significativas no ranking dos seus produtos.</p>
+        <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-gray-100">Histórico de Alertas</h2>
+        <p className="text-slate-500 dark:text-gray-400">Acompanhe as mudanças significativas no ranking dos seus produtos.</p>
       </div>
 
       <Card>
@@ -57,8 +57,8 @@ export default function Alerts() {
                 <TableRow key={alert.id}>
                   <TableCell className="pl-6">
                     <div className="space-y-0.5">
-                      <p className="font-semibold text-slate-900 line-clamp-1">{alert.product_name}</p>
-                      <p className="text-xs text-slate-500 font-mono">{alert.asin}</p>
+                      <p className="font-semibold text-slate-900 dark:text-gray-100 line-clamp-1">{alert.product_name}</p>
+                      <p className="text-xs text-slate-500 dark:text-gray-400 font-mono">{alert.asin}</p>
                     </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
@@ -75,12 +75,12 @@ export default function Alerts() {
                     </div>
                   </TableCell>
                   <TableCell className="max-w-xs">
-                    <p className="text-sm text-slate-600 italic line-clamp-2">
+                    <p className="text-sm text-slate-600 dark:text-gray-300 italic line-clamp-2">
                       "{alert.insight}"
                     </p>
                   </TableCell>
                   <TableCell className="pr-6 text-right">
-                    <Badge variant="outline" className="cursor-pointer hover:bg-slate-100 gap-1" render={<Link to={`/products/${alert.asin}`} />}>
+                    <Badge variant="outline" className="cursor-pointer hover:bg-slate-100 dark:hover:bg-gray-800 gap-1" render={<Link to={`/products/${alert.asin}`} />}>
                       Ver Detalhes
                       <ExternalLink className="h-3 w-3" />
                     </Badge>
@@ -89,7 +89,7 @@ export default function Alerts() {
               ))}
               {alerts?.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-slate-400">
+                  <TableCell colSpan={7} className="h-32 text-center text-slate-400 dark:text-gray-500">
                     Nenhum alerta registrado até o momento.
                   </TableCell>
                 </TableRow>
