@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, TrendingDown, TrendingUp, Calendar, Info, Download } from 'lucide-react';
+import { ChevronLeft, TrendingDown, TrendingUp, Calendar, Info, Download, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,6 +64,17 @@ export default function ProductDetail() {
   const latest = history[history.length - 1] || { main_rank: 0, sub_rank: 0 };
   const previous = history[history.length - 2] || latest;
   const insight = getInsight(latest.main_rank, previous.main_rank);
+
+  // Price stats from history
+  const priceEntries = history.filter((h: any) => h.price != null);
+  const currentPrice = priceEntries.length > 0 ? priceEntries[priceEntries.length - 1] : null;
+  let minPriceEntry: any = null;
+  let maxPriceEntry: any = null;
+  for (const h of priceEntries) {
+    const p = Number(h.price);
+    if (!minPriceEntry || p < Number(minPriceEntry.price)) minPriceEntry = h;
+    if (!maxPriceEntry || p > Number(maxPriceEntry.price)) maxPriceEntry = h;
+  }
 
   const filteredHistory = chartDays === 0
     ? history
@@ -337,6 +348,51 @@ export default function ProductDetail() {
               </div>
             </CardContent>
           </Card>
+
+          {priceEntries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-amber-500" />
+                  <CardTitle>Histórico de Preço</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between py-2 border-b">
+                  <span className="text-slate-500 dark:text-gray-400 text-sm">Preço atual</span>
+                  <span className="font-medium text-sm dark:text-gray-200">
+                    {currentPrice ? formatBRL(Number(currentPrice.price)) : '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-2 border-b">
+                  <div>
+                    <span className="text-slate-500 dark:text-gray-400 text-sm">Menor preço registrado</span>
+                    {minPriceEntry && (
+                      <p className="text-[11px] text-slate-400 dark:text-gray-500">
+                        {format(new Date(minPriceEntry.recorded_at), 'dd/MM/yyyy')}
+                      </p>
+                    )}
+                  </div>
+                  <span className="font-medium text-sm text-emerald-600 dark:text-emerald-400">
+                    {minPriceEntry ? formatBRL(Number(minPriceEntry.price)) : '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-2 border-b">
+                  <div>
+                    <span className="text-slate-500 dark:text-gray-400 text-sm">Maior preço registrado</span>
+                    {maxPriceEntry && (
+                      <p className="text-[11px] text-slate-400 dark:text-gray-500">
+                        {format(new Date(maxPriceEntry.recorded_at), 'dd/MM/yyyy')}
+                      </p>
+                    )}
+                  </div>
+                  <span className="font-medium text-sm text-rose-600 dark:text-rose-400">
+                    {maxPriceEntry ? formatBRL(Number(maxPriceEntry.price)) : '-'}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
