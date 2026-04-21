@@ -10,6 +10,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getInsight, calculateVariation } from '@/lib/insights';
+import { getCategoryName } from '@/lib/categoryMap';
 
 export default function ProductDetail() {
   const { asin } = useParams<{ asin: string }>();
@@ -209,11 +210,11 @@ export default function ProductDetail() {
             <CardContent className="space-y-4">
               <div className="flex justify-between py-2 border-b">
                 <span className="text-slate-500 text-sm">Categoria</span>
-                <span className="font-medium text-sm">{product.main_category || 'N/A'}</span>
+                <span className="font-medium text-sm">{getCategoryName(product.main_category)}</span>
               </div>
               <div className="flex justify-between py-2 border-b">
                 <span className="text-slate-500 text-sm">Subcategoria</span>
-                <span className="font-medium text-sm">{product.sub_category || 'N/A'}</span>
+                <span className="font-medium text-sm">{getCategoryName(product.sub_category)}</span>
               </div>
               <div className="flex justify-between py-2 border-b">
                 <span className="text-slate-500 text-sm">Monitorado desde</span>
