@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import ProductDetail from './pages/ProductDetail';
 import Alerts from './pages/Alerts';
+import Compare from './pages/Compare';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/products/:asin" element={<ProductDetail />} />
             <Route path="/alerts" element={<Alerts />} />
+            <Route path="/compare" element={<Compare />} />
           </Routes>
         </Layout>
       </Router>

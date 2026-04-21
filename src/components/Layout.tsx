@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bell, TrendingUp, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Bell, TrendingUp, Sun, Moon, GitCompareArrows } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
@@ -28,6 +28,7 @@ export default function Layout({ children }: LayoutProps) {
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Alertas', path: '/alerts', icon: Bell },
+    { name: 'Comparar', path: '/compare', icon: GitCompareArrows },
   ];
 
   return (

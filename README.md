@@ -1,6 +1,47 @@
 # BSR Tracker
 
-Sistema de monitoramento de Best Seller Rank (BSR) da Amazon para o marketplace Brasil (A2Q3Y263D00KWC). Permite rastrear a posicao dos seus produtos no ranking, registrar historico, calcular variacoes e gerar insights automaticos de precificacao.
+Sistema de monitoramento de Best Seller Rank (BSR) da Amazon para o marketplace Brasil (A2Q3Y263D00KWC). Permite rastrear a posicao dos seus produtos no ranking, registrar historico de BSR e preco, calcular variacoes, gerar insights automaticos de precificacao e comparar desempenho entre produtos.
+
+## Features
+
+### Coleta e Dados
+- Coleta automatica de BSR (principal e subcategoria) via Amazon SP-API
+- Coleta de preco Buy Box junto com o BSR a cada execucao
+- Categorias e subcategorias mapeadas para nomes em portugues
+- Retry automatico em caso de erro 429 (rate limit) com backoff progressivo
+- Delay de 3s entre ASINs para evitar quota exceeded
+
+### Dashboard
+- BSR da subcategoria como destaque principal nos cards
+- Badge de tendencia nos cards: **Subindo**, **Caindo**, **Estavel** ou **Sem rank** (stockout)
+- Alertas visuais para variacoes maiores que 30% (borda colorida + icone de alerta + negrito)
+- Tratamento de stockout: produtos com BSR = 0 nao disparam alerta falso de variacao
+- Ordenacao por multiplos criterios: mais recente, melhor BSR, maior/menor variacao, maior/menor preco
+- Filtro de busca por nome do produto ou ASIN
+- Bloqueio de cadastro de ASIN duplicado com validacao de formato
+- Edicao do nome e remocao de produtos com confirmacao
+
+### Detalhe do Produto
+- Grafico unificado com 3 linhas: BSR Principal, BSR Subcategoria e Preco Buy Box
+- Eixos duais invertidos (valores menores = melhor) + eixo de preco
+- Filtro de periodo 7 / 14 / 30 dias / Tudo (afeta grafico e tabela)
+- Coluna de preco na tabela de leituras recentes
+- Exportacao de historico em CSV
+- Menor, maior e preco atual no card "Historico de Preco"
+- BSR medio ultimos 7 dias vs 7 dias anteriores com variacao percentual
+- Analise Preco x BSR: agrupamento por faixas de preco com BSR medio por faixa
+- Insight automatico baseado na variacao mais recente
+
+### Comparacao de Produtos (`/compare`)
+- Selecao de ate 3 produtos para comparacao lado a lado
+- Grafico de linhas com BSR subcategoria de cada produto (eixo Y invertido)
+- Filtro de periodo 7 / 14 / 30 dias / Tudo
+- Tabela de metricas comparativas: BSR atual, BSR medio 7d, variacao 7d, menor preco
+
+### Geral
+- Modo escuro com persistencia no localStorage e deteccao de preferencia do sistema
+- Cores dos graficos Recharts adaptadas para modo escuro
+- Pagina de alertas com historico de variacoes e insights
 
 ## Arquitetura
 
@@ -8,25 +49,27 @@ Sistema de monitoramento de Best Seller Rank (BSR) da Amazon para o marketplace 
 bsrtracker/
 ├── src/                          # Frontend React (Vite)
 │   ├── pages/
-│   │   ├── Dashboard.tsx         # Lista de produtos com BSR atual
-│   │   ├── ProductDetail.tsx     # Detalhe + grafico historico
-│   │   └── Alerts.tsx            # Tabela de alertas gerados
+│   │   ├── Dashboard.tsx         # Cards de produtos, busca, ordenacao, alertas visuais
+│   │   ├── ProductDetail.tsx     # Grafico unificado, tabela, analise preco x BSR
+│   │   ├── Alerts.tsx            # Tabela de alertas gerados
+│   │   └── Compare.tsx           # Comparacao entre ate 3 produtos
 │   ├── components/
-│   │   ├── Layout.tsx            # Layout principal (header, nav, footer)
-│   │   └── ui/                   # Componentes shadcn/ui
+│   │   ├── Layout.tsx            # Layout principal (header, nav, footer, tema)
+│   │   └── ui/                   # Componentes shadcn/ui (base-ui)
 │   ├── lib/
 │   │   ├── supabase.ts          # Cliente Supabase (anon key, frontend)
 │   │   ├── insights.ts          # Logica de insight e calculo de variacao
+│   │   ├── categoryMap.ts       # Mapeamento de IDs de categoria para nomes em PT
 │   │   └── utils.ts             # Utilidade cn() para classnames
-│   ├── App.tsx                   # Router (3 rotas)
+│   ├── App.tsx                   # Router (4 rotas)
 │   └── main.tsx                  # Entry point React
 ├── api/                          # Serverless functions (Vercel)
-│   ├── collect-bsr.js           # Coleta BSR de todos os ASINs
+│   ├── collect-bsr.js           # Coleta BSR + preco de todos os ASINs
 │   ├── products.js              # GET produtos com BSR mais recente
 │   ├── test-auth.js             # Diagnostico: testa OAuth SP-API
 │   ├── test-spapi.js            # Diagnostico: testa conectividade SP-API
 │   └── lib/
-│       └── spapi.js             # Integracao SP-API (OAuth + pricing)
+│       └── spapi.js             # Integracao SP-API (OAuth + pricing + preco)
 ├── vercel.json                   # Rewrites para SPA + API
 ├── package.json
 ├── vite.config.ts
@@ -38,10 +81,11 @@ bsrtracker/
 | Camada | Tecnologia |
 |--------|-----------|
 | Frontend | React 19, TypeScript, Vite 6, Tailwind CSS 4 |
-| UI | shadcn/ui, Lucide Icons, Recharts, Sonner |
+| UI | shadcn/ui (base-ui), Lucide Icons, Recharts, Sonner |
 | State | React Query (TanStack Query v5) |
-| Backend | Vercel Serverless Functions (JavaScript puro) |
-| Database | Supabase (PostgreSQL) |
+| Routing | React Router DOM v7 |
+| Backend | Vercel Serverless Functions (JavaScript ESM) |
+| Database | Supabase (PostgreSQL + Row Level Security) |
 | API Externa | Amazon SP-API (Selling Partner API) |
 | Deploy | Vercel |
 
@@ -54,8 +98,8 @@ bsrtracker/
 | id | uuid (PK) | ID unico |
 | asin | text (UNIQUE) | ASIN do produto na Amazon |
 | name | text | Nome do produto |
-| main_category | text | Categoria principal |
-| sub_category | text | Subcategoria |
+| main_category | text | Categoria principal (atualizada pela SP-API) |
+| sub_category | text | Subcategoria (atualizada pela SP-API) |
 | created_at | timestamptz | Data de criacao |
 
 ### Tabela `bsr_history`
@@ -65,7 +109,8 @@ bsrtracker/
 | id | uuid (PK) | ID unico |
 | asin | text (FK -> products.asin) | ASIN do produto |
 | main_rank | integer | Ranking principal |
-| sub_rank | integer | Ranking na subcategoria |
+| sub_rank | integer | Ranking na subcategoria (0 = sem rank/stockout) |
+| price | numeric | Preco Buy Box em BRL (nullable) |
 | recorded_at | timestamptz | Momento da leitura |
 
 ### Tabela `alerts`
@@ -98,6 +143,8 @@ CREATE TABLE products (
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_select" ON products FOR SELECT USING (true);
 CREATE POLICY "allow_insert" ON products FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_update" ON products FOR UPDATE USING (true);
+CREATE POLICY "allow_delete" ON products FOR DELETE USING (true);
 
 -- bsr_history
 CREATE TABLE bsr_history (
@@ -105,6 +152,7 @@ CREATE TABLE bsr_history (
   asin          text NOT NULL REFERENCES products(asin) ON DELETE CASCADE,
   main_rank     integer NOT NULL,
   sub_rank      integer NOT NULL DEFAULT 0,
+  price         numeric,
   recorded_at   timestamptz NOT NULL DEFAULT now()
 );
 
@@ -176,36 +224,54 @@ GET /products/pricing/v0/items/{asin}/offers?MarketplaceId=A2Q3Y263D00KWC&ItemCo
 ### Parsing do Response
 
 ```
-payload.Summary.SalesRankings[0].Rank      -> rankMain (categoria principal)
-payload.Summary.SalesRankings[1].Rank      -> rankSub (subcategoria)
+payload.Summary.SalesRankings[0].Rank              -> rankMain (categoria principal)
+payload.Summary.SalesRankings[1].Rank              -> rankSub (subcategoria)
 payload.Summary.SalesRankings[0].ProductCategoryId -> category
 payload.Summary.SalesRankings[1].ProductCategoryId -> subcategory
+payload.Summary.BuyBoxPrices[0].LandedPrice.Amount -> price (BRL)
 ```
 
 ## API Endpoints
 
 ### `GET /api/collect-bsr`
 
-Coleta o BSR de todos os ASINs cadastrados. Fluxo:
+Coleta o BSR e preco de todos os ASINs cadastrados. Fluxo:
 
 1. Busca todos os produtos da tabela `products`
 2. Para cada ASIN:
-   - Chama `getBSR(asin)` via SP-API
+   - Chama `getBSR(asin)` via SP-API (retorna BSR + preco Buy Box)
    - Retry automatico em caso de 429: espera 10s, tenta de novo; se 429 de novo, espera 15s e tenta ultima vez
+   - Atualiza categorias na tabela `products`
    - Busca ultima leitura em `bsr_history`
-   - Salva nova leitura
+   - Salva nova leitura (incluindo preco)
    - Calcula variacao e gera insight
    - Salva alerta em `alerts`
 3. Delay de 3s entre cada ASIN para evitar rate limit
 4. Retorna JSON com resumo: `{ total, success, failed, results, errors }`
 
+**Cron job:** configure no Supabase (pg_cron) ou via cron externo para chamar este endpoint periodicamente. Exemplo com cron a cada 6 horas:
+
+```sql
+-- No Supabase SQL Editor (requer extensao pg_cron habilitada)
+SELECT cron.schedule(
+  'collect-bsr',
+  '0 */6 * * *',
+  $$SELECT net.http_get('https://seu-projeto.vercel.app/api/collect-bsr')$$
+);
+```
+
+Ou via cron externo (cron-job.org, GitHub Actions, etc.):
+```
+0 */6 * * * curl -s https://seu-projeto.vercel.app/api/collect-bsr
+```
+
 ### `GET /api/products`
 
-Retorna todos os produtos com historico BSR mais recente (join com `bsr_history`).
+Retorna todos os produtos com historico BSR (join com `bsr_history`).
 
 ### `GET /api/test-auth`
 
-Endpoint de diagnostico: testa apenas o OAuth (refresh token -> access token). Retorna preview do token e status das variaveis de ambiente.
+Endpoint de diagnostico: testa apenas o OAuth (refresh token -> access token).
 
 ### `GET /api/test-spapi`
 
@@ -215,24 +281,38 @@ Endpoint de diagnostico: chama `/sellers/v1/marketplaceParticipations` para test
 
 ### Dashboard (`/`)
 
-- Lista todos os produtos cadastrados em cards
-- Mostra BSR principal, variacao percentual, rank na subcategoria
-- Insight do dia (baseado na variacao mais recente)
-- Dialog para adicionar novo ASIN
-- Ordena bsr_history por `recorded_at` desc para exibir o mais recente
+- Cards de produtos com BSR da subcategoria em destaque
+- Badge de tendencia: Subindo / Caindo / Estavel (baseado em comparacao de 3 dias)
+- Badge "Sem rank" para produtos com BSR = 0 (stockout)
+- Alerta visual em cards com variacao > 30% (borda verde/vermelha + icone)
+- Busca por nome ou ASIN
+- Ordenacao: mais recente, melhor BSR, maior/menor variacao, maior/menor preco
+- Modal para adicionar ASIN (com validacao de formato e duplicata)
+- Modal de edicao de nome e remocao com confirmacao
 
 ### Detalhe do Produto (`/products/:asin`)
 
-- Grafico de linha (Recharts) com historico de BSR (main + sub)
-- Tabela de leituras recentes com variacao
-- Card de insight atual
-- Resumo: categoria, subcategoria, data de inicio do monitoramento
+- Grafico unificado (3 linhas): BSR Principal (eixo esq.), BSR Subcategoria (eixo dir.), Preco Buy Box
+- Filtro de periodo: 7d, 14d, 30d, Tudo (afeta grafico e tabela)
+- Tabela de leituras recentes com BSR Principal, Sub, Preco e variacao
+- Exportacao de historico em CSV
+- Card "Insight Atual" com sugestao de acao
+- Card "Resumo do Produto": categoria, subcategoria, data de monitoramento, BSR medio 7d vs 7d anteriores
+- Card "Historico de Preco": preco atual, menor e maior preco registrado com datas
+- Card "Analise Preco x BSR": agrupa leituras por faixa de preco (R$ 5), mostra BSR medio e quantidade de leituras por faixa, destaca a melhor faixa em verde
 
 ### Alertas (`/alerts`)
 
-- Tabela com todos os alertas gerados
+- Tabela com todos os alertas gerados automaticamente
 - Colunas: produto, data, BSR antes/depois, variacao %, insight
 - Link para detalhe do produto
+
+### Comparacao (`/compare`)
+
+- Selecao de ate 3 produtos via dropdown
+- Grafico de linhas com BSR subcategoria de cada produto (cores distintas, eixo Y invertido)
+- Filtro de periodo: 7d, 14d, 30d, Tudo
+- Tabela comparativa: BSR atual, BSR medio 7d, variacao 7d, menor preco registrado
 
 ## Deploy (Vercel)
 
@@ -291,6 +371,12 @@ variation_pct = ((rankAtual - rankAnterior) / rankAnterior) * 100
 - `direction: 'up'` = ranking melhorou (numero menor = posicao melhor)
 - `direction: 'down'` = ranking piorou (numero maior = posicao pior)
 
+### Tratamento de stockout
+
+- Produtos com `sub_rank = 0` recebem badge "Sem rank" no dashboard
+- Alertas visuais de variacao > 30% sao ignorados quando BSR atual ou anterior e 0
+- Calculos de media de BSR excluem leituras com `sub_rank = 0`
+
 ## Rate Limiting SP-API
 
 A Amazon impoe quotas no endpoint de pricing. Estrategia implementada:
@@ -308,8 +394,12 @@ A Amazon impoe quotas no endpoint de pricing. Estrategia implementada:
 
 2. **JavaScript puro nas serverless functions:** TypeScript nas funcoes da pasta `api/` causava erros de compilacao na Vercel. Convertido para `.js` para funcionamento imediato sem configuracao de build.
 
-3. **Endpoint de pricing ao inves de catalog:** o endpoint `/catalog/2022-04-01/items/{asin}?includedData=salesRanks` retornava 403. O endpoint `/products/pricing/v0/items/{asin}/offers` funciona corretamente e retorna `SalesRankings` no payload.
+3. **Endpoint de pricing ao inves de catalog:** o endpoint `/catalog/2022-04-01/items/{asin}?includedData=salesRanks` retornava 403. O endpoint `/products/pricing/v0/items/{asin}/offers` funciona corretamente e retorna `SalesRankings` e `BuyBoxPrices` no payload.
 
 4. **Sem AWS SigV4:** apps privados com a interface nova da Amazon nao exigem assinatura SigV4. Apenas o header `x-amz-access-token` e necessario.
 
-5. **RLS com politicas abertas:** as tabelas usam Row Level Security com `USING (true)` para SELECT/INSERT, permitindo acesso tanto pela anon key (frontend) quanto pela service key (backend).
+5. **RLS com politicas abertas:** as tabelas usam Row Level Security com `USING (true)` para SELECT/INSERT/UPDATE/DELETE, permitindo acesso tanto pela anon key (frontend) quanto pela service key (backend).
+
+6. **Modo escuro via classe CSS:** usa `@custom-variant dark (&:is(.dark *))` do Tailwind 4, com toggle no header e persistencia no `localStorage`. Cores dos graficos Recharts sao dinamicas via hook `useIsDark` que observa a classe `.dark` no `<html>`.
+
+7. **Mapeamento de categorias:** IDs tecnicos da Amazon (ex: `16364844011`) sao traduzidos para nomes em portugues via `categoryMap.ts`. Categorias nao mapeadas exibem o ID original como fallback.

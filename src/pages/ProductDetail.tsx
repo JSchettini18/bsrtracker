@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, TrendingDown, TrendingUp, Calendar, Info, Download, DollarSign } from 'lucide-react';
+import { ChevronLeft, TrendingDown, TrendingUp, Calendar, Info, Download, DollarSign, BarChart3 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -75,6 +75,41 @@ export default function ProductDetail() {
     if (!minPriceEntry || p < Number(minPriceEntry.price)) minPriceEntry = h;
     if (!maxPriceEntry || p > Number(maxPriceEntry.price)) maxPriceEntry = h;
   }
+
+  // BSR averages by period (ignoring sub_rank = 0 / stockout)
+  const now = Date.now();
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const fourteenDaysAgo = now - 14 * 24 * 60 * 60 * 1000;
+
+  const last7 = history.filter((h: any) => new Date(h.recorded_at).getTime() >= sevenDaysAgo && h.sub_rank > 0);
+  const prev7 = history.filter((h: any) => {
+    const t = new Date(h.recorded_at).getTime();
+    return t >= fourteenDaysAgo && t < sevenDaysAgo && h.sub_rank > 0;
+  });
+
+  const avg7 = last7.length > 0 ? Math.round(last7.reduce((s: number, h: any) => s + h.sub_rank, 0) / last7.length) : null;
+  const avgPrev7 = prev7.length > 0 ? Math.round(prev7.reduce((s: number, h: any) => s + h.sub_rank, 0) / prev7.length) : null;
+  const avgVariation = avg7 != null && avgPrev7 != null && avgPrev7 !== 0
+    ? ((avg7 - avgPrev7) / avgPrev7) * 100
+    : null;
+
+  // Price × BSR correlation: group by price bands
+  const priceAndBsr = history.filter((h: any) => h.price != null && h.sub_rank > 0);
+  const priceBands: { label: string; min: number; max: number; totalBsr: number; count: number; avg: number }[] = [];
+  if (priceAndBsr.length >= 5) {
+    const prices = priceAndBsr.map((h: any) => Number(h.price));
+    const minP = Math.floor(Math.min(...prices) / 5) * 5;
+    const maxP = Math.ceil(Math.max(...prices) / 5) * 5;
+    for (let lo = minP; lo < maxP; lo += 5) {
+      const hi = lo + 5;
+      const inBand = priceAndBsr.filter((h: any) => Number(h.price) >= lo && Number(h.price) < hi);
+      if (inBand.length > 0) {
+        const totalBsr = inBand.reduce((s: number, h: any) => s + h.sub_rank, 0);
+        priceBands.push({ label: `R$ ${lo}–${hi}`, min: lo, max: hi, totalBsr, count: inBand.length, avg: Math.round(totalBsr / inBand.length) });
+      }
+    }
+  }
+  const bestBandAvg = priceBands.length > 0 ? Math.min(...priceBands.map(b => b.avg)) : null;
 
   const filteredHistory = chartDays === 0
     ? history
@@ -346,6 +381,28 @@ export default function ProductDetail() {
                 <span className="text-slate-500 dark:text-gray-400 text-sm">Monitorado desde</span>
                 <span className="font-medium text-sm dark:text-gray-200">{format(new Date(product.created_at), 'dd/MM/yyyy')}</span>
               </div>
+              {avg7 != null && (
+                <div className="flex justify-between items-center py-2 border-b">
+                  <span className="text-slate-500 dark:text-gray-400 text-sm">BSR médio últimos 7 dias</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm dark:text-gray-200">#{avg7.toLocaleString()}</span>
+                    {avgVariation != null && (
+                      <span className={`flex items-center gap-0.5 text-xs font-semibold ${
+                        avgVariation < 0 ? 'text-emerald-600 dark:text-emerald-400' : avgVariation > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500'
+                      }`}>
+                        {avgVariation < 0 ? <TrendingDown className="h-3 w-3" /> : avgVariation > 0 ? <TrendingUp className="h-3 w-3" /> : null}
+                        {Math.abs(avgVariation).toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {avgPrev7 != null && (
+                <div className="flex justify-between py-2 border-b">
+                  <span className="text-slate-500 dark:text-gray-400 text-sm">BSR médio 7 dias anteriores</span>
+                  <span className="font-medium text-sm dark:text-gray-200">#{avgPrev7.toLocaleString()}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -393,6 +450,43 @@ export default function ProductDetail() {
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-violet-500" />
+                <CardTitle>Análise Preço × BSR</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {priceAndBsr.length < 5 ? (
+                <p className="text-sm text-slate-500 dark:text-gray-400 italic">
+                  Aguardando mais dados para análise ({priceAndBsr.length}/5 leituras com preço e rank)
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Faixa de Preço</TableHead>
+                      <TableHead>BSR Médio</TableHead>
+                      <TableHead className="text-right">Leituras</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {priceBands.map((band) => (
+                      <TableRow key={band.label} className={band.avg === bestBandAvg ? 'bg-emerald-50 dark:bg-emerald-950/30' : ''}>
+                        <TableCell className="font-medium text-sm">{band.label}</TableCell>
+                        <TableCell className={`text-sm ${band.avg === bestBandAvg ? 'text-emerald-600 dark:text-emerald-400 font-bold' : ''}`}>
+                          #{band.avg.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-slate-500 dark:text-gray-400">{band.count}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
