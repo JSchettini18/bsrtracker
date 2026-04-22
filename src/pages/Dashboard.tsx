@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Plus, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Minus, Pencil, Trash2, Search, Package, AlertTriangle, ArrowUpDown, Ban } from 'lucide-react';
+import { Plus, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Minus, Pencil, Trash2, Search, Package, AlertTriangle, ArrowUpDown, Ban, Download } from 'lucide-react';
+import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -141,6 +142,43 @@ export default function Dashboard() {
     editProductMutation.mutate({ asin: editProduct.asin, name: editName.trim() });
   };
 
+  const exportGeneralCSV = () => {
+    if (!products || products.length === 0) return;
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    const rows: string[][] = [['ASIN', 'Nome do Produto', 'Data', 'BSR Principal', 'BSR Subcategoria', 'Preco', 'Variacao %']];
+
+    const sorted = [...products].sort((a: any, b: any) => a.asin.localeCompare(b.asin));
+    for (const product of sorted) {
+      const history = (product.bsr_history || [])
+        .filter((h: any) => new Date(h.recorded_at).getTime() >= cutoff)
+        .sort((a: any, b: any) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
+
+      history.forEach((h: any, i: number) => {
+        const prev = history[i + 1] || h;
+        const variation = i < history.length - 1 ? calculateVariation(h.main_rank, prev.main_rank).toFixed(2) : '';
+        const price = h.price != null ? Number(h.price).toFixed(2) : '';
+        rows.push([
+          product.asin,
+          `"${product.name.replace(/"/g, '""')}"`,
+          format(new Date(h.recorded_at), 'dd/MM/yyyy HH:mm'),
+          String(h.main_rank),
+          String(h.sub_rank),
+          price,
+          variation,
+        ]);
+      });
+    }
+
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bsr-geral-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -168,11 +206,16 @@ export default function Dashboard() {
           <p className="text-slate-500 dark:text-gray-400">Acompanhe o desempenho dos seus produtos na Amazon.</p>
         </div>
 
-        <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) setAddError(''); }}>
-          <DialogTrigger render={<Button className="gap-2" />}>
-            <Plus className="h-4 w-4" />
-            Adicionar ASIN
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2" onClick={exportGeneralCSV} disabled={!products || products.length === 0}>
+            <Download className="h-4 w-4" />
+            Exportar CSV Geral
+          </Button>
+          <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) setAddError(''); }}>
+            <DialogTrigger render={<Button className="gap-2" />}>
+              <Plus className="h-4 w-4" />
+              Adicionar ASIN
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Adicionar Novo Produto</DialogTitle>
@@ -207,8 +250,9 @@ export default function Dashboard() {
                 </Button>
               </DialogFooter>
             </form>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Edit modal */}
