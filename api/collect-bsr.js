@@ -118,38 +118,48 @@ export default async function handler(req, res) {
       if (lastReading) {
         const rankBefore = lastReading.main_rank;
         const rankAfter = bsr.rankMain;
-        const variationPct = parseFloat(
-          (((rankAfter - rankBefore) / rankBefore) * 100).toFixed(2)
-        );
 
-        // Higher rank number = worse position
-        const direction = rankAfter > rankBefore ? 'down' : 'up';
-
-        const insight =
-          rankAfter > rankBefore
-            ? 'Ranking caiu — considere reduzir o preço para recuperar posição'
-            : rankAfter < rankBefore
-            ? 'Ranking melhorou — avalie aumentar o preço ou reduzir desconto'
-            : 'Ranking estável — continue monitorando';
-
-        console.log(
-          `[collect-bsr] Variation for ${product.asin}: ${variationPct}% | direction: ${direction}`
-        );
-
-        const { error: alertError } = await supabase.from('alerts').insert({
-          asin: product.asin,
-          product_name: product.name,
-          rank_before: rankBefore,
-          rank_after: rankAfter,
-          variation_pct: variationPct,
-          direction,
-          insight,
-        });
-
-        if (alertError) {
-          console.error(`[collect-bsr] Error saving alert for ${product.asin}:`, alertError);
+        // Skip alert if either rank is 0 (stockout) or if variation is not calculable
+        if (rankBefore === 0 || rankAfter === 0) {
+          console.log(`[collect-bsr] Stockout detected for ${product.asin} (before=${rankBefore}, after=${rankAfter}) — skipping alert`);
         } else {
-          console.log(`[collect-bsr] Alert saved for ${product.asin}`);
+          const variationPct = parseFloat(
+            (((rankAfter - rankBefore) / rankBefore) * 100).toFixed(2)
+          );
+
+          if (isNaN(variationPct) || !isFinite(variationPct)) {
+            console.log(`[collect-bsr] Invalid variation for ${product.asin} (NaN/Infinity) — skipping alert`);
+          } else {
+            // Higher rank number = worse position
+            const direction = rankAfter > rankBefore ? 'down' : 'up';
+
+            const insight =
+              rankAfter > rankBefore
+                ? 'Ranking caiu — considere reduzir o preço para recuperar posição'
+                : rankAfter < rankBefore
+                ? 'Ranking melhorou — avalie aumentar o preço ou reduzir desconto'
+                : 'Ranking estável — continue monitorando';
+
+            console.log(
+              `[collect-bsr] Variation for ${product.asin}: ${variationPct}% | direction: ${direction}`
+            );
+
+            const { error: alertError } = await supabase.from('alerts').insert({
+              asin: product.asin,
+              product_name: product.name,
+              rank_before: rankBefore,
+              rank_after: rankAfter,
+              variation_pct: variationPct,
+              direction,
+              insight,
+            });
+
+            if (alertError) {
+              console.error(`[collect-bsr] Error saving alert for ${product.asin}:`, alertError);
+            } else {
+              console.log(`[collect-bsr] Alert saved for ${product.asin}`);
+            }
+          }
         }
       } else {
         console.log(`[collect-bsr] No previous reading for ${product.asin} — skipping alert`);
@@ -169,21 +179,34 @@ export default async function handler(req, res) {
   // ====== Competitors collection ======
   console.log('[collect-bsr] ====== Starting competitors collection ======');
 
-  const { data: competitors, error: competitorsError } = await supabase
-    .from('competitors')
-    .select('*')
-    .eq('active', true);
+  let competitors = null;
+  let competitorsError = null;
+
+  try {
+    const result = await supabase
+      .from('competitors')
+      .select('*')
+      .eq('active', true);
+    competitors = result.data;
+    competitorsError = result.error;
+    console.log(`[collect-bsr] Competitors query returned: data=${JSON.stringify(competitors?.length ?? 'null')}, error=${JSON.stringify(competitorsError)}`);
+  } catch (fetchErr) {
+    console.error('[collect-bsr] Exception fetching competitors:', fetchErr.message);
+    competitorsError = fetchErr;
+  }
 
   const competitorResults = [];
   const competitorErrors = [];
 
   if (competitorsError) {
     console.error('[collect-bsr] Error fetching competitors:', competitorsError);
+  } else if (!competitors || competitors.length === 0) {
+    console.log('[collect-bsr] No active competitors found — skipping');
   } else {
     console.log(`[collect-bsr] Found ${competitors.length} competitor(s) to process`);
 
     for (const comp of competitors) {
-      console.log(`[collect-bsr] --- Processing competitor ${comp.competitor_asin} (${comp.name}) ---`);
+      console.log(`[collect-bsr] --- Processing competitor ${comp.competitor_asin} for parent ${comp.parent_asin} (${comp.name}) ---`);
 
       let bsr = null;
       let attempt = 0;
