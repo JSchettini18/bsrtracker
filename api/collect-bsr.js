@@ -166,12 +166,96 @@ export default async function handler(req, res) {
     await delay(3000);
   }
 
+  // ====== Competitors collection ======
+  console.log('[collect-bsr] ====== Starting competitors collection ======');
+
+  const { data: competitors, error: competitorsError } = await supabase
+    .from('competitors')
+    .select('*')
+    .eq('active', true);
+
+  const competitorResults = [];
+  const competitorErrors = [];
+
+  if (competitorsError) {
+    console.error('[collect-bsr] Error fetching competitors:', competitorsError);
+  } else {
+    console.log(`[collect-bsr] Found ${competitors.length} competitor(s) to process`);
+
+    for (const comp of competitors) {
+      console.log(`[collect-bsr] --- Processing competitor ${comp.competitor_asin} (${comp.name}) ---`);
+
+      let bsr = null;
+      let attempt = 0;
+      const maxAttempts = 3;
+
+      while (attempt < maxAttempts) {
+        attempt++;
+        try {
+          console.log(`[collect-bsr] getBSR attempt ${attempt}/${maxAttempts} for competitor ${comp.competitor_asin}`);
+          bsr = await getBSR(comp.competitor_asin);
+          console.log(`[collect-bsr] Competitor BSR fetched:`, bsr);
+          break;
+        } catch (err) {
+          const is429 = err.message?.includes('429');
+          if (is429 && attempt < maxAttempts) {
+            const waitMs = RETRY_DELAYS[attempt - 1];
+            console.log(`[collect-bsr] 429 on attempt ${attempt} for competitor ${comp.competitor_asin} — waiting ${waitMs / 1000}s`);
+            await delay(waitMs);
+          } else {
+            console.error(`[collect-bsr] Failed competitor ${comp.competitor_asin} (attempt ${attempt}):`, err.message);
+            competitorErrors.push({ competitor_asin: comp.competitor_asin, error: err.message, attempts: attempt });
+            break;
+          }
+        }
+      }
+
+      if (!bsr) {
+        console.log(`[collect-bsr] Waiting 3s before next competitor...`);
+        await delay(3000);
+        continue;
+      }
+
+      try {
+        const { error: insertError } = await supabase
+          .from('competitor_history')
+          .insert({
+            competitor_id: comp.id,
+            main_rank: bsr.rankMain,
+            sub_rank: bsr.rankSub,
+            price: bsr.price,
+            recorded_at: new Date().toISOString(),
+          });
+
+        if (insertError) {
+          throw new Error(`Failed to insert competitor_history: ${insertError.message}`);
+        }
+
+        console.log(`[collect-bsr] competitor_history saved for ${comp.competitor_asin}`);
+        competitorResults.push({ competitor_asin: comp.competitor_asin, success: true, bsr });
+      } catch (err) {
+        console.error(`[collect-bsr] Failed to save competitor data for ${comp.competitor_asin}:`, err.message);
+        competitorErrors.push({ competitor_asin: comp.competitor_asin, error: err.message });
+      }
+
+      console.log(`[collect-bsr] Waiting 3s before next competitor...`);
+      await delay(3000);
+    }
+  }
+
   const summary = {
     total: products.length,
     success: results.length,
     failed: errors.length,
     results,
     errors,
+    competitors: {
+      total: competitors?.length ?? 0,
+      success: competitorResults.length,
+      failed: competitorErrors.length,
+      results: competitorResults,
+      errors: competitorErrors,
+    },
   };
 
   console.log('[collect-bsr] ====== Collection complete ======', summary);
