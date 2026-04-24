@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, TrendingDown, TrendingUp, Calendar, Info, Download, DollarSign, BarChart3, Plus, Trash2, Users } from 'lucide-react';
+import { ChevronLeft, ChevronDown, TrendingDown, TrendingUp, Calendar, Info, Download, DollarSign, BarChart3, Plus, Trash2, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,10 @@ export default function ProductDetail() {
   const [compAsin, setCompAsin] = useState('');
   const [compName, setCompName] = useState('');
   const [compError, setCompError] = useState('');
+
+  // Collapsible sections
+  const [readingsOpen, setReadingsOpen] = useState(false);
+  const [competitorsOpen, setCompetitorsOpen] = useState(true);
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', asin],
@@ -400,10 +404,13 @@ export default function ProductDetail() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Leituras Recentes</CardTitle>
+            <CardHeader className="cursor-pointer select-none" onClick={() => setReadingsOpen(!readingsOpen)}>
+              <div className="flex items-center justify-between">
+                <CardTitle>Leituras Recentes</CardTitle>
+                <ChevronDown className={`h-5 w-5 text-slate-400 dark:text-gray-500 transition-transform duration-200 ${readingsOpen ? 'rotate-180' : ''}`} />
+              </div>
             </CardHeader>
-            <CardContent>
+            {readingsOpen && <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -446,24 +453,27 @@ export default function ProductDetail() {
                   })}
                 </TableBody>
               </Table>
-            </CardContent>
+            </CardContent>}
           </Card>
 
           {/* Competitors section */}
           <Card>
-            <CardHeader>
+            <CardHeader className="cursor-pointer select-none" onClick={() => setCompetitorsOpen(!competitorsOpen)}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-violet-500" />
                   <CardTitle>Concorrentes</CardTitle>
                 </div>
-                <Button size="sm" className="gap-1.5 text-xs" onClick={() => setIsCompModalOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" />
-                  Adicionar Concorrente
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" className="gap-1.5 text-xs" onClick={(e) => { e.stopPropagation(); setIsCompModalOpen(true); }}>
+                    <Plus className="h-3.5 w-3.5" />
+                    Adicionar Concorrente
+                  </Button>
+                  <ChevronDown className={`h-5 w-5 text-slate-400 dark:text-gray-500 transition-transform duration-200 ${competitorsOpen ? 'rotate-180' : ''}`} />
+                </div>
               </div>
             </CardHeader>
-            <CardContent>
+            {competitorsOpen && <CardContent>
               {competitors.length === 0 ? (
                 <p className="text-sm text-slate-500 dark:text-gray-400 italic">
                   Nenhum concorrente cadastrado. Adicione para comparar BSR e preço.
@@ -517,7 +527,7 @@ export default function ProductDetail() {
                   })}
                 </div>
               )}
-            </CardContent>
+            </CardContent>}
           </Card>
 
           {/* Add Competitor modal */}
