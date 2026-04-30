@@ -250,6 +250,9 @@ export default function ProductDetail() {
     });
 
     // Competitors section
+    const totalCompHistRows = competitors.reduce((sum: number, c: any) => sum + (c.competitor_history || []).length, 0);
+    console.log(`[CSV Produto] Concorrentes: ${competitors.length} competidores, ${totalCompHistRows} leituras totais`);
+
     if (competitors.length > 0) {
       rows.push([]);
       rows.push(['=== CONCORRENTES ===']);
@@ -273,7 +276,8 @@ export default function ProductDetail() {
     }
 
     const csv = rows.map(r => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

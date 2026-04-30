@@ -66,7 +66,14 @@ export default function Dashboard() {
         .from('competitors')
         .select(`*, competitor_history (*)`)
         .eq('active', true);
-      if (error) throw error;
+      if (error) {
+        console.error('[Dashboard] Error fetching competitors:', error);
+        throw error;
+      }
+      console.log(`[Dashboard] Competitors fetched: ${data?.length ?? 0}`);
+      data?.forEach((c: any) => {
+        console.log(`[Dashboard] Competitor ${c.competitor_asin} (${c.name}): ${c.competitor_history?.length ?? 0} history records`);
+      });
       return data;
     },
     staleTime: 0,
@@ -183,6 +190,12 @@ export default function Dashboard() {
     }
 
     // Competitors section
+    const totalCompHistRows = allCompetitors.reduce((sum: number, c: any) => {
+      const hist = (c.competitor_history || []).filter((h: any) => new Date(h.recorded_at).getTime() >= cutoff);
+      return sum + hist.length;
+    }, 0);
+    console.log(`[CSV Geral] Concorrentes: ${allCompetitors.length} competidores, ${totalCompHistRows} leituras nos últimos 14 dias`);
+
     if (allCompetitors.length > 0) {
       rows.push([]);
       rows.push(['=== CONCORRENTES ===']);
@@ -192,16 +205,22 @@ export default function Dashboard() {
         a.parent_asin.localeCompare(b.parent_asin)
       );
 
+      console.log(`[CSV Geral] Processando ${sortedComps.length} concorrentes...`);
+      let compRowCount = 0;
+
       for (const comp of sortedComps) {
         const parentProduct = (products || []).find((p: any) => p.asin === comp.parent_asin);
         const parentName = parentProduct?.name || comp.parent_asin;
-        const compHist = (comp.competitor_history || [])
+        const allHist = comp.competitor_history || [];
+        const compHist = allHist
           .filter((h: any) => new Date(h.recorded_at).getTime() >= cutoff)
           .sort((a: any, b: any) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
 
-        compHist.forEach((h: any) => {
+        console.log(`[CSV Geral] Competitor ${comp.competitor_asin}: ${allHist.length} total, ${compHist.length} após filtro 14d, parent="${parentName}"`);
+
+        for (const h of compHist) {
           const price = h.price != null ? Number(h.price).toFixed(2) : '';
-          rows.push([
+          const row = [
             comp.parent_asin,
             `"${parentName.replace(/"/g, '""')}"`,
             comp.competitor_asin,
@@ -210,13 +229,24 @@ export default function Dashboard() {
             String(h.main_rank),
             String(h.sub_rank),
             price,
-          ]);
-        });
+          ];
+          rows.push(row);
+          compRowCount++;
+        }
       }
+
+      console.log(`[CSV Geral] Total de linhas de concorrentes adicionadas ao CSV: ${compRowCount}`);
+    } else {
+      console.log('[CSV Geral] allCompetitors está vazio — nenhum concorrente para exportar');
     }
 
+    console.log(`[CSV Geral] Total de linhas no CSV: ${rows.length}`);
     const csv = rows.map(r => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    // Log últimas 5 linhas para confirmar presença dos concorrentes
+    const csvLines = csv.split('\n');
+    console.log(`[CSV Geral] Últimas 5 linhas do CSV:`, csvLines.slice(-5));
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
