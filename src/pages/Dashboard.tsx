@@ -59,6 +59,19 @@ export default function Dashboard() {
     staleTime: 0,
   });
 
+  const { data: allCompetitors = [] } = useQuery({
+    queryKey: ['competitors-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('competitors')
+        .select(`*, competitor_history (*)`)
+        .eq('active', true);
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 0,
+  });
+
   const addProductMutation = useMutation({
     mutationFn: async (product: { asin: string; name: string }) => {
       const { data, error } = await supabase
@@ -167,6 +180,39 @@ export default function Dashboard() {
           variation,
         ]);
       });
+    }
+
+    // Competitors section
+    if (allCompetitors.length > 0) {
+      rows.push([]);
+      rows.push(['=== CONCORRENTES ===']);
+      rows.push(['ASIN Pai', 'Nome Produto Pai', 'ASIN Concorrente', 'Nome Concorrente', 'Data', 'BSR Principal', 'BSR Subcategoria', 'Preco']);
+
+      const sortedComps = [...allCompetitors].sort((a: any, b: any) =>
+        a.parent_asin.localeCompare(b.parent_asin)
+      );
+
+      for (const comp of sortedComps) {
+        const parentProduct = (products || []).find((p: any) => p.asin === comp.parent_asin);
+        const parentName = parentProduct?.name || comp.parent_asin;
+        const compHist = (comp.competitor_history || [])
+          .filter((h: any) => new Date(h.recorded_at).getTime() >= cutoff)
+          .sort((a: any, b: any) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
+
+        compHist.forEach((h: any) => {
+          const price = h.price != null ? Number(h.price).toFixed(2) : '';
+          rows.push([
+            comp.parent_asin,
+            `"${parentName.replace(/"/g, '""')}"`,
+            comp.competitor_asin,
+            `"${comp.name.replace(/"/g, '""')}"`,
+            format(new Date(h.recorded_at), 'dd/MM/yyyy HH:mm'),
+            String(h.main_rank),
+            String(h.sub_rank),
+            price,
+          ]);
+        });
+      }
     }
 
     const csv = rows.map(r => r.join(',')).join('\n');

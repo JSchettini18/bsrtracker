@@ -248,6 +248,30 @@ export default function ProductDetail() {
         variation,
       ]);
     });
+
+    // Competitors section
+    if (competitors.length > 0) {
+      rows.push([]);
+      rows.push(['=== CONCORRENTES ===']);
+      rows.push(['ASIN Concorrente', 'Nome do Concorrente', 'Data', 'BSR Principal', 'BSR Subcategoria', 'Preço']);
+      for (const comp of competitors) {
+        const compHist = [...(comp.competitor_history || [])].sort(
+          (a: any, b: any) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
+        );
+        compHist.forEach((h: any) => {
+          const price = h.price != null ? Number(h.price).toFixed(2) : '';
+          rows.push([
+            comp.competitor_asin,
+            `"${comp.name.replace(/"/g, '""')}"`,
+            format(new Date(h.recorded_at), 'dd/MM/yyyy HH:mm'),
+            String(h.main_rank),
+            String(h.sub_rank),
+            price,
+          ]);
+        });
+      }
+    }
+
     const csv = rows.map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
