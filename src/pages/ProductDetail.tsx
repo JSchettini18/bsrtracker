@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronDown, TrendingDown, TrendingUp, Calendar, Info, Download, DollarSign, BarChart3, Plus, Trash2, Users } from 'lucide-react';
+import { ChevronLeft, ChevronDown, TrendingDown, TrendingUp, Calendar, Info, Download, DollarSign, BarChart3, Plus, Trash2, Users, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { format } from 'date-fns';
+import { format, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { getInsight, calculateVariation } from '@/lib/insights';
@@ -512,6 +512,10 @@ export default function ProductDetail() {
                     const compHist = comp.competitor_history || [];
                     const compLatest = compHist[compHist.length - 1] || { main_rank: 0, sub_rank: 0, price: null };
                     const color = isDark ? COMP_COLORS_DARK[idx % COMP_COLORS_DARK.length] : COMP_COLORS[idx % COMP_COLORS.length];
+                    const lastReadAt = compLatest.recorded_at ? new Date(compLatest.recorded_at) : null;
+                    const hoursSinceLast = lastReadAt ? differenceInHours(new Date(), lastReadAt) : null;
+                    const isStale = hoursSinceLast != null && hoursSinceLast >= 24;
+                    const daysStale = isStale ? Math.floor(hoursSinceLast / 24) : 0;
                     return (
                       <div
                         key={comp.id}
@@ -549,6 +553,21 @@ export default function ProductDetail() {
                               {compLatest.price != null ? formatBRL(Number(compLatest.price)) : '-'}
                             </p>
                           </div>
+                        </div>
+                        <div className="pt-1 border-t dark:border-gray-700 space-y-0.5">
+                          <p className="text-[11px] text-slate-400 dark:text-gray-500">
+                            {lastReadAt
+                              ? `Última leitura: ${format(lastReadAt, 'dd/MM HH:mm', { locale: ptBR })}`
+                              : 'Sem leituras ainda'}
+                          </p>
+                          {isStale && (
+                            <p className="flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                              {daysStale >= 1
+                                ? `Sem coleta há ${daysStale} dia${daysStale > 1 ? 's' : ''}`
+                                : `Sem coleta há ${hoursSinceLast}h`}
+                            </p>
+                          )}
                         </div>
                       </div>
                     );

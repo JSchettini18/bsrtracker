@@ -28,7 +28,11 @@ export async function getAccessToken() {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Failed to get access token: ${response.status} ${text}`);
+    const err = new Error(`Failed to get access token: ${response.status} ${text}`);
+    err.status = response.status;
+    err.body = text;
+    err.step = 'getAccessToken';
+    throw err;
   }
 
   const data = await response.json();
@@ -56,7 +60,12 @@ export async function getBSR(asin) {
   console.log(`[spapi] Response body: ${bodyText}`);
 
   if (!response.ok) {
-    throw new Error(`SP-API pricing error for ${asin}: ${response.status} ${bodyText}`);
+    const err = new Error(`SP-API pricing error for ${asin}: ${response.status} ${bodyText}`);
+    err.status = response.status;
+    err.body = bodyText;
+    err.step = 'pricing';
+    err.asin = asin;
+    throw err;
   }
 
   const data = JSON.parse(bodyText);
