@@ -246,8 +246,10 @@ Coleta o BSR e preco de todos os ASINs cadastrados. Fluxo:
    - Salva nova leitura (incluindo preco)
    - Calcula variacao e gera insight
    - Salva alerta em `alerts`
-3. Delay de 3s entre cada ASIN para evitar rate limit
+3. Delay de 2s entre cada ASIN para evitar rate limit
 4. Retorna JSON com resumo: `{ total, success, failed, results, errors }`
+
+Este endpoint coleta **apenas os produtos proprios**. Concorrentes sao coletados por `/api/collect-competitors` (abaixo).
 
 **Cron job:** configure no Supabase (pg_cron) ou via cron externo para chamar este endpoint periodicamente. Exemplo com cron a cada 6 horas:
 
@@ -263,6 +265,24 @@ SELECT cron.schedule(
 Ou via cron externo (cron-job.org, GitHub Actions, etc.):
 ```
 0 */6 * * * curl -s https://seu-projeto.vercel.app/api/collect-bsr
+```
+
+### `GET /api/collect-competitors`
+
+Coleta BSR e preco de todos os concorrentes ativos (`competitors.active = true`) e salva em `competitor_history`. Roda separado do `collect-bsr` para nao estourar o limite de duracao da Vercel (`maxDuration: 300`).
+
+1. Busca concorrentes ativos
+2. Para cada um: `getBSR()` com retry em 429 (10s / 15s), insere em `competitor_history`
+3. Qualquer falha e logada como `[collect-competitors] COMPETITOR FAILED {asin}: ...` com status HTTP e body da SP-API
+4. Delay de 2s entre concorrentes
+5. Log final: `[collect-competitors] Done: X success, Y failed de Z total`
+
+**Cron jobs (Supabase pg_cron)** — 15 min apos cada coleta de produtos:
+
+```sql
+SELECT cron.schedule('collect-competitors-morning',   '15 12 * * *', $$SELECT net.http_get('https://bsrtracker.vercel.app/api/collect-competitors')$$);
+SELECT cron.schedule('collect-competitors-afternoon', '15 18 * * *', $$SELECT net.http_get('https://bsrtracker.vercel.app/api/collect-competitors')$$);
+SELECT cron.schedule('collect-competitors-evening',   '15 0 * * *',  $$SELECT net.http_get('https://bsrtracker.vercel.app/api/collect-competitors')$$);
 ```
 
 ### `GET /api/products`
