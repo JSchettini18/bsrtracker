@@ -271,11 +271,14 @@ Ou via cron externo (cron-job.org, GitHub Actions, etc.):
 
 Coleta BSR e preco de todos os concorrentes ativos (`competitors.active = true`) e salva em `competitor_history`. Roda separado do `collect-bsr` para nao estourar o limite de duracao da Vercel (`maxDuration: 300`).
 
-1. Busca concorrentes ativos
-2. Para cada um: `getBSR()` com retry em 429 (10s / 15s), insere em `competitor_history`
-3. Qualquer falha e logada como `[collect-competitors] COMPETITOR FAILED {asin}: ...` com status HTTP e body da SP-API
-4. Delay de 2s entre concorrentes
-5. Log final: `[collect-competitors] Done: X success, Y failed de Z total`
+Trabalha em **lotes** para caber no timeout do pg_net: aceita `?limit=` (default 25) e processa os `limit` concorrentes ativos mais desatualizados (leitura mais antiga primeiro; quem nunca teve leitura vem antes de todos). Chamadas consecutivas drenam a fila automaticamente, sem offset.
+
+1. Busca concorrentes ativos e a ultima leitura de cada um em `competitor_history`
+2. Ordena do mais desatualizado para o mais recente e pega os `limit` primeiros
+3. Para cada um: `getBSR()` com retry em 429 (10s / 15s), insere em `competitor_history`
+4. Qualquer falha e logada como `[collect-competitors] COMPETITOR FAILED {asin}: ...` com status HTTP e body da SP-API
+5. Delay de 2s entre concorrentes
+6. Retorno/log final inclui `pending`: quantos ativos continuam com leitura mais antiga que 1h (ou sem leitura)
 
 **Cron jobs (Supabase pg_cron)** — 15 min apos cada coleta de produtos:
 

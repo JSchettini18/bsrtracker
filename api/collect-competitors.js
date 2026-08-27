@@ -28,11 +28,15 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1h: readings older than this count as pending
+
 export default async function handler(req, res) {
   const startedAt = Date.now();
-  console.log('[collect-competitors] ====== Starting competitors collection ======');
+  const limitParam = parseInt(req.query?.limit, 10);
+  const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 25;
+  console.log(`[collect-competitors] ====== Starting competitors collection (batch limit=${limit}) ======`);
 
-  let competitors = null;
+  let allCompetitors = null;
   let competitorsError = null;
 
   try {
@@ -40,9 +44,9 @@ export default async function handler(req, res) {
       .from('competitors')
       .select('*')
       .eq('active', true);
-    competitors = result.data;
+    allCompetitors = result.data;
     competitorsError = result.error;
-    console.log(`[collect-competitors] Competitors query returned: data=${JSON.stringify(competitors?.length ?? 'null')}, error=${JSON.stringify(competitorsError)}`);
+    console.log(`[collect-competitors] Competitors query returned: data=${JSON.stringify(allCompetitors?.length ?? 'null')}, error=${JSON.stringify(competitorsError)}`);
   } catch (fetchErr) {
     console.error('[collect-competitors] Exception fetching competitors:', fetchErr.message);
     competitorsError = fetchErr;
@@ -52,6 +56,41 @@ export default async function handler(req, res) {
     console.error('[collect-competitors] Error fetching competitors:', competitorsError);
     return res.status(500).json({ error: competitorsError.message ?? String(competitorsError) });
   }
+
+  // Find each competitor's latest reading so the batch always starts with whoever
+  // is most out of date (or has never been read). Consecutive calls therefore
+  // drain the backlog automatically, no offset needed.
+  const lastReadById = new Map();
+  if (allCompetitors && allCompetitors.length > 0) {
+    const lookups = await Promise.all(
+      allCompetitors.map(async comp => {
+        try {
+          const { data, error } = await supabase
+            .from('competitor_history')
+            .select('recorded_at')
+            .eq('competitor_id', comp.id)
+            .order('recorded_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (error) throw error;
+          return { id: comp.id, lastRead: data?.recorded_at ?? null };
+        } catch (err) {
+          // Treat a failed lookup as "never read" so the competitor is prioritized, not skipped.
+          console.error(`[collect-competitors] Failed to fetch last reading for competitor ${comp.competitor_asin}: ${err.message}`);
+          return { id: comp.id, lastRead: null };
+        }
+      })
+    );
+    for (const { id, lastRead } of lookups) lastReadById.set(id, lastRead);
+  }
+
+  const byMostOutdated = [...(allCompetitors ?? [])].sort((a, b) => {
+    const ta = lastReadById.get(a.id) ? Date.parse(lastReadById.get(a.id)) : 0;
+    const tb = lastReadById.get(b.id) ? Date.parse(lastReadById.get(b.id)) : 0;
+    return ta - tb;
+  });
+  const competitors = byMostOutdated.slice(0, limit);
+  console.log(`[collect-competitors] Batch: ${competitors.length} of ${byMostOutdated.length} active competitor(s), most outdated first`);
 
   const competitorResults = [];
   const competitorErrors = [];
@@ -121,7 +160,7 @@ export default async function handler(req, res) {
           }
 
           console.log(`[collect-competitors] competitor_history saved for ${compAsin}`);
-          competitorResults.push({ competitor_asin: compAsin, success: true, bsr });
+          competitorResults.push({ competitor_id: comp.id, competitor_asin: compAsin, success: true, bsr });
         }
       } catch (err) {
         competitorErrors.push(logCompetitorFailure(compAsin, err, 'insert/unexpected'));
@@ -134,15 +173,29 @@ export default async function handler(req, res) {
     }
   }
 
+  // Pending = active competitors still without a reading in the last hour after this run
+  // (not selected for this batch, or selected but failed).
+  const succeededIds = new Set(competitorResults.map(r => r.competitor_id));
+  const staleCutoff = Date.now() - STALE_THRESHOLD_MS;
+  const pending = (allCompetitors ?? []).filter(comp => {
+    if (succeededIds.has(comp.id)) return false;
+    const lastRead = lastReadById.get(comp.id);
+    return !lastRead || Date.parse(lastRead) < staleCutoff;
+  });
+
   const summary = {
-    total: competitors?.length ?? 0,
+    activeTotal: allCompetitors?.length ?? 0,
+    batchLimit: limit,
+    total: competitors.length,
     success: competitorResults.length,
     failed: competitorErrors.length,
+    pending: pending.length,
+    pendingAsins: pending.map(c => c.competitor_asin),
     durationMs: Date.now() - startedAt,
     results: competitorResults,
     errors: competitorErrors,
   };
 
-  console.log(`[collect-competitors] Done: ${summary.success} success, ${summary.failed} failed de ${summary.total} total (${Math.round(summary.durationMs / 1000)}s)`);
+  console.log(`[collect-competitors] Done: ${summary.success} success, ${summary.failed} failed de ${summary.total} no lote (${summary.activeTotal} ativos, ${summary.pending} pendentes com leitura > 1h, ${Math.round(summary.durationMs / 1000)}s)`);
   return res.status(200).json(summary);
 }
