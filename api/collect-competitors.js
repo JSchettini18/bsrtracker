@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { waitUntil } from '@vercel/functions';
 import { getBSR } from './lib/spapi.js';
 
 // Competitor collection runs in its own function so it never competes with the
@@ -31,9 +32,34 @@ const supabase = createClient(
 const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1h: readings older than this count as pending
 
 export default async function handler(req, res) {
-  const startedAt = Date.now();
   const limitParam = parseInt(req.query?.limit, 10);
   const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 25;
+
+  // Sync mode (?sync=1) for manual debugging: waits for everything and returns the full summary.
+  if (req.query?.sync === '1') {
+    const summary = await runCollection(limit);
+    return res.status(summary.error ? 500 : 200).json(summary);
+  }
+
+  // Default: respond immediately so short-timeout callers (Supabase pg_net) can
+  // disconnect without Vercel cancelling the run; work continues via waitUntil.
+  const timestamp = new Date().toISOString();
+  waitUntil(
+    runCollection(limit)
+      .then(summary => {
+        if (summary.error) {
+          console.error(`[collect-competitors] Background run failed: ${summary.error}`);
+        } else {
+          console.log(`[collect-competitors] Background run finished: ${summary.success} success, ${summary.failed} failed (${Math.round(summary.durationMs / 1000)}s)`);
+        }
+      })
+      .catch(err => console.error('[collect-competitors] Background run crashed:', err))
+  );
+  return res.status(202).json({ started: true, timestamp, batchLimit: limit });
+}
+
+async function runCollection(limit) {
+  const startedAt = Date.now();
   console.log(`[collect-competitors] ====== Starting competitors collection (batch limit=${limit}) ======`);
 
   let allCompetitors = null;
@@ -54,7 +80,7 @@ export default async function handler(req, res) {
 
   if (competitorsError) {
     console.error('[collect-competitors] Error fetching competitors:', competitorsError);
-    return res.status(500).json({ error: competitorsError.message ?? String(competitorsError) });
+    return { error: competitorsError.message ?? String(competitorsError) };
   }
 
   // Find each competitor's latest reading so the batch always starts with whoever
@@ -197,5 +223,5 @@ export default async function handler(req, res) {
   };
 
   console.log(`[collect-competitors] Done: ${summary.success} success, ${summary.failed} failed de ${summary.total} no lote (${summary.activeTotal} ativos, ${summary.pending} pendentes com leitura > 1h, ${Math.round(summary.durationMs / 1000)}s)`);
-  return res.status(200).json(summary);
+  return summary;
 }

@@ -247,7 +247,8 @@ Coleta o BSR e preco de todos os ASINs cadastrados. Fluxo:
    - Calcula variacao e gera insight
    - Salva alerta em `alerts`
 3. Delay de 2s entre cada ASIN para evitar rate limit
-4. Retorna JSON com resumo: `{ total, success, failed, results, errors }`
+4. Responde **imediatamente** com `202 { started, timestamp }` e processa em background (`waitUntil`), para o timeout de 5s do pg_net nao cancelar a funcao. O resumo aparece nos logs da Vercel: `[collect-bsr] Background run finished: X success, Y failed (Zs)`
+5. Debug manual: `?sync=1` aguarda tudo e retorna o JSON completo `{ total, success, failed, results, errors }`
 
 Este endpoint coleta **apenas os produtos proprios**. Concorrentes sao coletados por `/api/collect-competitors` (abaixo).
 
@@ -278,7 +279,9 @@ Trabalha em **lotes** para caber no timeout do pg_net: aceita `?limit=` (default
 3. Para cada um: `getBSR()` com retry em 429 (10s / 15s), insere em `competitor_history`
 4. Qualquer falha e logada como `[collect-competitors] COMPETITOR FAILED {asin}: ...` com status HTTP e body da SP-API
 5. Delay de 2s entre concorrentes
-6. Retorno/log final inclui `pending`: quantos ativos continuam com leitura mais antiga que 1h (ou sem leitura)
+6. Log final inclui `pending`: quantos ativos continuam com leitura mais antiga que 1h (ou sem leitura)
+
+Responde **imediatamente** com `202 { started, timestamp, batchLimit }` e processa em background (`waitUntil`), para o timeout de 5s do pg_net nao cancelar a funcao. O resumo aparece nos logs da Vercel: `[collect-competitors] Background run finished: X success, Y failed (Zs)`. Debug manual: `?sync=1` aguarda tudo e retorna o JSON completo.
 
 **Cron jobs (Supabase pg_cron)** — 15 min apos cada coleta de produtos:
 

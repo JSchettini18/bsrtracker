@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { waitUntil } from '@vercel/functions';
 import { getBSR } from './lib/spapi.js';
 
 // Own-products collection only. Competitors are collected by /api/collect-competitors.
@@ -12,6 +13,31 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
+  // Sync mode (?sync=1) for manual debugging: waits for everything and returns the full summary.
+  if (req.query?.sync === '1') {
+    const summary = await runCollection();
+    return res.status(summary.error ? 500 : 200).json(summary);
+  }
+
+  // Default: respond immediately so short-timeout callers (Supabase pg_net) can
+  // disconnect without Vercel cancelling the run; work continues via waitUntil.
+  const timestamp = new Date().toISOString();
+  waitUntil(
+    runCollection()
+      .then(summary => {
+        if (summary.error) {
+          console.error(`[collect-bsr] Background run failed: ${summary.error}`);
+        } else {
+          console.log(`[collect-bsr] Background run finished: ${summary.success} success, ${summary.failed} failed (${Math.round(summary.durationMs / 1000)}s)`);
+        }
+      })
+      .catch(err => console.error('[collect-bsr] Background run crashed:', err))
+  );
+  return res.status(202).json({ started: true, timestamp });
+}
+
+async function runCollection() {
+  const startedAt = Date.now();
   console.log('[collect-bsr] ====== Starting BSR collection ======');
 
   // Fetch all products
@@ -21,7 +47,7 @@ export default async function handler(req, res) {
 
   if (productsError) {
     console.error('[collect-bsr] Error fetching products:', productsError);
-    return res.status(500).json({ error: productsError.message });
+    return { error: productsError.message };
   }
 
   console.log(`[collect-bsr] Found ${products.length} product(s) to process`);
@@ -183,10 +209,11 @@ export default async function handler(req, res) {
     total: products.length,
     success: results.length,
     failed: errors.length,
+    durationMs: Date.now() - startedAt,
     results,
     errors,
   };
 
   console.log('[collect-bsr] ====== Collection complete ======', summary);
-  return res.status(200).json(summary);
+  return summary;
 }
