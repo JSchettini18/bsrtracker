@@ -1,10 +1,13 @@
 import { getAccessToken, getBSR } from './lib/spapi.js';
+import { requireCronSecret } from './lib/auth.js';
 
 // Usage:
 //   GET /api/test-spapi              -> connectivity test (marketplaceParticipations)
 //   GET /api/test-spapi?asin=B0XXXX  -> raw getBSR() result for that ASIN, with full
 //                                       SP-API status + body on error
 export default async function handler(req, res) {
+  if (!(await requireCronSecret(req, res))) return;
+
   const asin = typeof req.query?.asin === 'string' ? req.query.asin.trim().toUpperCase() : '';
 
   if (asin) {

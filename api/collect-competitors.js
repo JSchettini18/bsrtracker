@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { waitUntil } from '@vercel/functions';
 import { getBSR } from './lib/spapi.js';
+import { requireCronSecret } from './lib/auth.js';
 
 // Competitor collection runs in its own function so it never competes with the
 // own-products collection for Vercel's execution time budget.
@@ -32,6 +33,8 @@ const supabase = createClient(
 const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1h: readings older than this count as pending
 
 export default async function handler(req, res) {
+  if (!(await requireCronSecret(req, res))) return;
+
   const limitParam = parseInt(req.query?.limit, 10);
   const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 25;
 

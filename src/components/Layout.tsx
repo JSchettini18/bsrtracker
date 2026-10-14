@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bell, TrendingUp, Sun, Moon, GitCompareArrows } from 'lucide-react';
+import { LayoutDashboard, Bell, TrendingUp, Sun, Moon, GitCompareArrows, LogOut } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
@@ -73,6 +74,15 @@ export default function Layout({ children }: LayoutProps) {
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              title="Sair"
+              onClick={() => supabase.auth.signOut()}
+            >
+              <LogOut className="h-5 w-5" />
             </Button>
           </div>
         </div>

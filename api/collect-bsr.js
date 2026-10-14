@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { waitUntil } from '@vercel/functions';
 import { getBSR } from './lib/spapi.js';
+import { requireCronSecret } from './lib/auth.js';
 
 // Own-products collection only. Competitors are collected by /api/collect-competitors.
 export const config = { maxDuration: 300 };
@@ -13,6 +14,8 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
+  if (!(await requireCronSecret(req, res))) return;
+
   // Sync mode (?sync=1) for manual debugging: waits for everything and returns the full summary.
   if (req.query?.sync === '1') {
     const summary = await runCollection();

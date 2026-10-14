@@ -1,6 +1,9 @@
 import { getAccessToken } from './lib/spapi.js';
+import { requireCronSecret } from './lib/auth.js';
 
 export default async function handler(req, res) {
+  if (!(await requireCronSecret(req, res))) return;
+
   console.log('[test-auth] Starting auth test...');
 
   try {
